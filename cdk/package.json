@@ -9,18 +9,18 @@
     "deploy": "cdk deploy --profile produser"
   },
   "devDependencies": {
-    "@types/jest": "^29.2.3",
-    "@types/node": "18.11.9",
+    "@types/jest": "^29.2.4",
+    "@types/node": "18.11.17",
     "@types/prettier": "2.7.1",
-    "aws-cdk": "2.53.0",
+    "aws-cdk": "2.55.1",
     "jest": "^29.3.1",
     "ts-jest": "^29.0.3",
     "ts-node": "^10.9.1",
-    "typescript": "~4.9.3"
+    "typescript": "~4.9.4"
   },
   "dependencies": {
-    "aws-cdk-lib": "2.53.0",
-    "constructs": "^10.1.174",
+    "aws-cdk-lib": "2.55.1",
+    "constructs": "^10.1.193",
     "dotenv": "^16.0.3",
     "source-map-support": "^0.5.21"
   }
