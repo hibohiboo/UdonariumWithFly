@@ -24,8 +24,8 @@ import { OpenUrlComponent } from 'component/open-url/open-url.component';
 import { ModalService } from 'service/modal.service';
 import { Card } from '@udonarium/card';
 import { CardStack } from '@udonarium/card-stack';
-import { element } from 'protractor';
 import { DiceSymbol } from '@udonarium/dice-symbol';
+import { RangeArea } from '@udonarium/range';
 
 @Component({
   selector: 'overview-panel',
@@ -356,6 +356,27 @@ export class OverviewPanelComponent implements AfterViewInit, OnDestroy {
       card = this.tabletopObject;
     }
     return card ? StringUtil.rubyToHtml(StringUtil.escapeHtml(card.text)) : '';
+  }
+
+  get cardTextShadowCss(): string {
+    const shadow = StringUtil.textShadowColor(this.cardColor);
+    return `${shadow} 0px 0px 2px, 
+    ${shadow} 0px 0px 2px, 
+    ${shadow} 0px 0px 2px, 
+    ${shadow} 0px 0px 2px, 
+    ${shadow} 0px 0px 2px, 
+    ${shadow} 0px 0px 2px,
+    ${shadow} 0px 0px 2px,
+    ${shadow} 0px 0px 2px`;
+  }
+
+  get rangeElms(): DataElement[] {
+    let ret = []
+    if (!this.tabletopObject || !(this.tabletopObject instanceof RangeArea) || !this.tabletopObject.commonDataElement) return ret;
+    if (this.tabletopObject.commonDataElement.getFirstElementByName('length')) ret.push(this.tabletopObject.commonDataElement.getFirstElementByName('length'));
+    if ((this.tabletopObject.type === 'CORN' || this.tabletopObject.type === 'LINE') && this.tabletopObject.commonDataElement.getFirstElementByName('width')) ret.push(this.tabletopObject.commonDataElement.getFirstElementByName('width'));
+    if (this.tabletopObject.commonDataElement.getFirstElementByName('opacity')) ret.push(this.tabletopObject.commonDataElement.getFirstElementByName('opacity'));
+    return ret;
   }
 
   get isNoLogging(): boolean {

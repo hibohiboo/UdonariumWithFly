@@ -17,8 +17,11 @@
     <ng-container *ngSwitchCase="'dice-symbol'">
       <ng-container *ngTemplateOutlet="overviewDiceSymbol; context: { dice: tabletopObject }"></ng-container>
     </ng-container>
+    <ng-container *ngSwitchCase="'range'">
+      <ng-container *ngTemplateOutlet="overviewRange; context: { range: tabletopObject }"></ng-container>
+    </ng-container>
     <ng-container *ngSwitchDefault>
-      <ng-container *ngTemplateOutlet="overviewCharacter; context: { character: tabletopObject }"></ng-container>
+      <ng-container *ngTemplateOutlet="overviewTabletop; context: { object: tabletopObject }"></ng-container>
     </ng-container>
   </ng-container>
 </div>
@@ -35,13 +38,13 @@
         class="text" style="z-index: 5; top: 8px"
         [style.width.px]="imageAreaRect.width" [style.height.px]="imageAreaRect.height" [style.left.px]="imageAreaRect.left" 
         [ngStyle]="{transform: 'scale(' + imageAreaRect.scale + ')'}">
-        <div [style.font-size.px]="cardFontSize" [style.color]="cardColor" [innerHTML]="cardText | safe: 'html'"></div>
+        <div [style.font-size.px]="cardFontSize" [style.color]="cardColor" [style.text-shadow]="cardTextShadowCss" [innerHTML]="cardText | safe: 'html'"></div>
       </div>
       <img #cardImage class="card-image" [src]="imageUrl | safe: 'resourceUrl'" (load)="onCardImageLoad()" draggable="false" />
       <button class="zoom-button" (click)="chanageImageView(true)" style="z-index: 10">
         <i class="material-icons">zoom_in</i>
       </button>
-      <div *ngIf="card.hasOwner && 0 < card.ownerName.length" class="component-owner position-right-bottom" style="z-index: 10"
+      <div *ngIf="card.ownerIsOnline && 0 < card.ownerName.length" class="component-owner position-right-bottom" style="z-index: 10"
         [ngClass]="{'with-button-marign': hasImage}">
         <div class="owner-tag" [style.background-color]="card.ownerColor">{{card.ownerName}}</div>
       </div>
@@ -156,6 +159,93 @@
   </div>
 </ng-template>
 
+<ng-template #overviewRange let-range="range">
+  <div class="component-content character-grid-container is-middle-size" >
+    <div class="title-bg-area title-background"
+      [ngClass]="{ 'is-pointer-events-auto': !this.isPointerDragging, 'pointer-events-none': this.isPointerDragging }">
+    </div>
+    <div class="title-area component-title" [ngClass]="{ 'is-pointer-events-auto': !this.isPointerDragging,
+      'pointer-events-none': this.isPointerDragging }">{{range.name}}</div>
+    <div class="void-area is-pointer-events-none"></div>
+    <div class="dataElm-area component-background"
+      [ngClass]="{ 'is-pointer-events-auto': !this.isPointerDragging, 'pointer-events-none': this.isPointerDragging }">
+      <div class="grid-container-root" *ngIf="rangeElms.length > 0">
+        <div class="grid-container">
+          <ng-container *ngFor="let dataElm of rangeElms">
+            <ng-container *ngIf="dataElm.name == 'length' || dataElm.name == 'width'">
+              <div class="tag" style="min-width: 100px" [attr.title]="dataElm.name">{{dataElm.name}}</div>
+              <div class="value">
+                <div style="display: inline-block; width: min-content;">
+                  <div class="hidden-spacer" style="margin-right: 2em;">{{dataElm.value}}</div>
+                  <input class="input" style="width:4em" type="number" step="0.1" size="1" [(ngModel)]="dataElm.value" />
+                </div>
+              </div>
+              <div class="section" style="line-height: 1em;">
+                <input type="range" title="{{dataElm.value}}"
+                  [style]="'font-size: 0.8em; width: 100%; --min: 0; --max:' + dataElm.value + '; --val:' + dataElm.currentValue +';' | safe: 'style'"
+                  [min]="dataElm.name == 'length' ? 1 : 0" max="12" step="0.5" [(ngModel)]="dataElm.value" />
+              </div>
+            </ng-container>
+            <ng-container *ngIf="dataElm.name == 'opacity'">
+              <div class="tag" style="min-width: 100px" [attr.title]="dataElm.name">{{dataElm.name}}</div>
+              <div class="value">
+                <div style="display: inline-block; width: min-content;">
+                  <div class="hidden-spacer" style="margin-right: 2em;">{{dataElm.currentValue}}</div>
+                  <input class="input" style="width:4em" type="number" size="1" [(ngModel)]="dataElm.currentValue" /><b class="move" style="font-size: small">%</b>
+                </div>
+              </div>
+              <div class="section" style="line-height: 1em;">
+                <input type="range" title="{{dataElm.currentValue}}%"
+                  [style]="'font-size: 0.8em; width: 100%; --min: 0; --max:' + dataElm.value + '; --val:' + dataElm.currentValue +';' | safe: 'style'"
+                  min="0" max="100" [(ngModel)]="dataElm.currentValue" />
+              </div>
+            </ng-container>
+          </ng-container>
+          <ng-container *ngIf="range.followingCharactor">
+            <div class="tag">→ {{ range.followingCharactor.name }}</div>
+            <div class="value" style="margin-top: 3px">
+              <div class="inverser" style="min-width: 32px; min-height: 32px; max-width: 32px; max-height: 32px; margin-left: auto; margin-right: 0px" [ngClass]="{inverse: range.followingCharactor.isInverse, hollow: range.followingCharactor.isHollow}">
+                <span class="aura-following" [ngClass]="{black: range.followingCharactor.aura == 0, blue: range.followingCharactor.aura == 1, green: range.followingCharactor.aura == 2, cyan: range.followingCharactor.aura == 3, red: range.followingCharactor.aura == 4, magenta: range.followingCharactor.aura == 5, yellow: range.followingCharactor.aura == 6, white: range.followingCharactor.aura == 7}">
+                  <img style="max-width: 32px; max-height: 32px" class="character-image" [ngClass]="{'black-paint': range.followingCharactor.isBlackPaint}" [src]="range.followingCharactor.imageFile.url | safe: 'resourceUrl'" style="pointer-events: none">
+                </span>
+              </div>
+            </div>
+          </ng-container>
+          <div *ngIf="dataElms.length > 0" class="section border" style="padding-top: 2px"></div>
+          <ng-container *ngFor="let dataElm of dataElms">
+            <ng-container *ngIf="dataElm && dataElm.name !== newLineString">
+              <ng-container *ngTemplateOutlet="dataElement; context: { dataElm: dataElm, name: range.name }"></ng-container>
+            </ng-container>
+          </ng-container>
+        </div>
+      </div>
+    </div>
+  </div>
+</ng-template>
+
+<ng-template #overviewTabletop let-object="object">
+  <div class="component-content character-grid-container is-middle-size" >
+    <div class="title-bg-area title-background"
+      [ngClass]="{ 'is-pointer-events-auto': !this.isPointerDragging, 'pointer-events-none': this.isPointerDragging }">
+    </div>
+    <div class="title-area component-title" [ngClass]="{ 'is-pointer-events-auto': !this.isPointerDragging,
+      'pointer-events-none': this.isPointerDragging }">{{object.name}}</div>
+    <div class="void-area is-pointer-events-none"></div>
+    <div class="dataElm-area component-background"
+      [ngClass]="{ 'is-pointer-events-auto': !this.isPointerDragging, 'pointer-events-none': this.isPointerDragging }">
+      <div class="grid-container-root">
+        <div class="grid-container">
+          <ng-container *ngFor="let dataElm of dataElms">
+            <ng-container *ngIf="dataElm && dataElm.name !== newLineString">
+              <ng-container *ngTemplateOutlet="dataElement; context: { dataElm: dataElm, name: object.name }"></ng-container>
+            </ng-container>
+          </ng-container>
+        </div>
+      </div>
+    </div>
+  </div>
+</ng-template>
+
 <ng-template #dataElement let-dataElm="dataElm" let-name="name">
   <ng-container *ngIf="0 < dataElm.children.length; then thenBlock; else elseBlock"></ng-container>
   <ng-template #thenBlock>
@@ -243,7 +333,7 @@
       class="text" style="z-index: 5"
       [style.width.px]="fullImageAreaRect.width" [style.height.px]="fullImageAreaRect.height" [style.left.px]="fullImageAreaRect.left" [style.top.px]="fullImageAreaRect.top"
       [ngStyle]="{transform: 'scale(' + fullImageAreaRect.scale + ')'}">
-      <div [style.font-size.px]="cardFontSize" [style.color]="cardColor" [innerHTML]="cardText | safe: 'html'"></div>
+      <div [style.font-size.px]="cardFontSize" [style.color]="cardColor" [style.text-shadow]="cardTextShadowCss" [innerHTML]="cardText | safe: 'html'"></div>
     </div>
     <div class="close-button is-pointer-events-none" style="z-index: 10"><i class="material-icons">close</i></div>
     <img #fullCardImage class="contain-image" [src]="imageUrl | safe: 'resourceUrl'" draggable="false" />

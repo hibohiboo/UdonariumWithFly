@@ -93,6 +93,7 @@ export class CardStackComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   get hasOwner(): boolean { return this.cardStack.hasOwner; }
+  get ownerIsOnline(): boolean { return this.cardStack.ownerIsOnline; }
   get ownerName(): string { return this.cardStack.ownerName; }
   get ownerColor(): string { return this.cardStack.ownerColor; }
 
@@ -533,6 +534,18 @@ export class CardStackComponent implements OnInit, AfterViewInit, OnDestroy {
       card.setLocation(this.cardStack.location.name);
     }
     return card;
+  }
+
+  textShadowCss(textColor: string): string {
+    const shadow = StringUtil.textShadowColor(textColor);
+    return `${shadow} 0px 0px 2px, 
+    ${shadow} 0px 0px 2px, 
+    ${shadow} 0px 0px 2px, 
+    ${shadow} 0px 0px 2px, 
+    ${shadow} 0px 0px 2px, 
+    ${shadow} 0px 0px 2px,
+    ${shadow} 0px 0px 2px,
+    ${shadow} 0px 0px 2px`;
   }
 
   private breakStack() {

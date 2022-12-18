@@ -22,6 +22,7 @@ import { PointerDeviceService } from 'service/pointer-device.service';
 import { StringUtil } from '@udonarium/core/system/util/string-util';
 import { PeerCursor } from '@udonarium/peer-cursor';
 import { ImageFile } from '@udonarium/core/file-storage/image-file';
+import { RangeArea } from '@udonarium/range';
 
 @Component({
   selector: 'game-character-sheet',
@@ -135,6 +136,9 @@ export class GameCharacterSheetComponent implements OnInit, OnDestroy, AfterView
             case 'character':
               this.panelService.title = `キャラクターシート - ${this.tableTopObjectName}`;
               break;
+            case 'range':
+              this.panelService.title = `射程・範囲設定 - ${this.tableTopObjectName}`;
+              break;
           }  
         }
       });
@@ -201,6 +205,11 @@ export class GameCharacterSheetComponent implements OnInit, OnDestroy, AfterView
     if (!tabletopObject) return ImageFile.Empty;
     if (tabletopObject instanceof Card && this.isVisible) return tabletopObject.frontImage;
     return tabletopObject.imageFile;
+  }
+
+  get descriptionType():string {
+    if (this.tabletopObject instanceof RangeArea && !this.tabletopObject.isApplyWidth) return 'range-not-width';
+    return this.tabletopObject.aliasName;
   }
 
   async saveToXML() {
@@ -480,6 +489,18 @@ export class GameCharacterSheetComponent implements OnInit, OnDestroy, AfterView
       card = this.tabletopObject;
     }
     return card ? StringUtil.rubyToHtml(StringUtil.escapeHtml(card.text)) : '';
+  }
+
+  get cardTextShadowCss(): string {
+    const shadow = StringUtil.textShadowColor(this.cardColor);
+    return `${shadow} 0px 0px 2px, 
+    ${shadow} 0px 0px 2px, 
+    ${shadow} 0px 0px 2px, 
+    ${shadow} 0px 0px 2px, 
+    ${shadow} 0px 0px 2px, 
+    ${shadow} 0px 0px 2px,
+    ${shadow} 0px 0px 2px,
+    ${shadow} 0px 0px 2px`;
   }
 
   get isVisible(): boolean {
