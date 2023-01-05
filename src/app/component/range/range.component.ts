@@ -336,6 +336,13 @@ export class RangeComponent implements OnInit, OnDestroy, AfterViewInit {
   get followingCharactor(): GameCharacter { return this.range.followingCharactor; }
   set followingCharactor(followingCharactor: GameCharacter) { this.range.followingCharactor = followingCharactor; }
 
+  get isFollowed(): boolean {
+    return this.followingCharactor 
+      && this.followingCharactor.location.x <= this.range.location.x && this.range.location.x <= (this.followingCharactor.location.x + this.followingCharactor.size * this.gridSize)
+      && this.followingCharactor.location.y <= this.range.location.y && this.range.location.y <= (this.followingCharactor.location.y + this.followingCharactor.size * this.gridSize)
+      && (this.followingCharactor.altitude + this.followingCharactor.posZ - 0.5) <= (this.range.altitude + this.range.posZ) && (this.range.altitude + this.range.posZ) <= (this.followingCharactor.altitude + this.followingCharactor.posZ + 0.5)
+  }
+
   get dockableCharacters(): GameCharacter[] {
     let ary: GameCharacter[] = this.tabletopService.characters.filter(character => {
       if (character.location.name !== 'table' || character.isHideIn) return false;
@@ -358,6 +365,16 @@ export class RangeComponent implements OnInit, OnDestroy, AfterViewInit {
     let length = (this.length < 1 ? 1 : this.length);
     if (this.followingCharactor && this.range.isExpandByFollowing) length += this.followingCharactor.size / 2;
     return length;
+  }
+
+  get rotateHandlesLeftPos(): number[] {
+    let ret: number[] = [];
+    for (let i = 1; i < Math.ceil((this.rangeLength) / 6); i++) {
+      ret.push(this.rangeLength * i / Math.ceil((this.rangeLength) / 6));
+    }
+    ret.push(this.rangeLength);
+    //console.log(ret)
+    return ret;
   }
 
   gridSize: number = 50;
@@ -529,15 +546,16 @@ export class RangeComponent implements OnInit, OnDestroy, AfterViewInit {
             }
           };
         });
-      if (this.followingCharactor) {
+      //if (this.followingCharactor) {
         if (menu.length != 0) menu.push(ContextMenuSeparator);
         menu.push({
             name: '追従を解除する', action: () => {
               SoundEffect.play(PresetSound.unlock);
               this.followingCharactor = null;
-            }
+            },
+            disabled: !this.followingCharactor
           });
-      }
+      //}
       menuArray.push({
           name: '付近のキャラクターに追従', action: null, 
           subActions: menu
@@ -557,12 +575,12 @@ export class RangeComponent implements OnInit, OnDestroy, AfterViewInit {
         menuArray.push(
           this.range.isFollowAltitude
           ? {
-            name: '☑ 高度にも追従', action: () => {
+            name: '☑ 高さにも追従', action: () => {
               this.range.isFollowAltitude = false;
             }
           }
           : {
-            name: '☐ 高度にも追従', action: () => {
+            name: '☐ 高さにも追従', action: () => {
               this.range.isFollowAltitude = true;
               if (this.followingCharactor) this.range.following();
             }
@@ -582,7 +600,7 @@ export class RangeComponent implements OnInit, OnDestroy, AfterViewInit {
         }
       );
     }
-
+    menuArray.push(ContextMenuSeparator);
 /*
     menuArray.push(
       {
