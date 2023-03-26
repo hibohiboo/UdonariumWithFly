@@ -52,7 +52,7 @@ export class GameObjectInventoryComponent implements OnInit, OnDestroy {
 
   get sortOrderName(): string { return this.sortOrder === SortOrder.ASC ? '昇順' : '降順'; }
 
-  get newLineString(): string { return this.inventoryService.newLineString; }
+  get newLineStrings(): string { return this.inventoryService.newLineStrings; }
 
   get isGMMode(): boolean{ return PeerCursor.myCursor ? PeerCursor.myCursor.isGMMode : false; }
 
@@ -128,16 +128,26 @@ export class GameObjectInventoryComponent implements OnInit, OnDestroy {
     return this.getInventory(gameObject.location.name).dataElementMap.get(gameObject.identifier);
   }
 
-  onContextMenu(e: Event, gameObject: GameCharacter) {
+  onContextMenu(event: Event, gameObject: GameCharacter) {
     if (document.activeElement instanceof HTMLInputElement && document.activeElement.getAttribute('type') !== 'range') return;
-    e.stopPropagation();
-    e.preventDefault();
+    event.stopPropagation();
+    event.preventDefault();
 
     if (!this.pointerDeviceService.isAllowedToOpenContextMenu) return;
 
     this.selectGameObject(gameObject);
 
-    let position = this.pointerDeviceService.pointers[0];
+    const target = <HTMLElement>event.target;
+    let position;
+    if (target && target.tagName === 'BUTTON') {
+      const clientRect = target.getBoundingClientRect();
+      position = { 
+        x: window.pageXOffset + clientRect.left + target.clientWidth,
+        y: window.pageYOffset + clientRect.top
+      };
+    } else {
+      position = this.pointerDeviceService.pointers[0];
+    }
     
     let actions: ContextMenuAction[] = [];
     if (gameObject.location.name === 'table' && (this.isGMMode || gameObject.isVisible)) {
@@ -330,11 +340,11 @@ export class GameObjectInventoryComponent implements OnInit, OnDestroy {
       altitudeHande: gameObject
     });
     actions.push(ContextMenuSeparator);
-    actions.push({ name: '詳細を表示', action: () => { this.showDetail(gameObject); } });
+    actions.push({ name: '詳細を表示...', action: () => { this.showDetail(gameObject); } });
     //if (gameObject.location.name !== 'graveyard') {
-      actions.push({ name: 'チャットパレットを表示', action: () => { this.showChatPalette(gameObject) }, disabled: gameObject.location.name === 'graveyard' });
+      actions.push({ name: 'チャットパレットを表示...', action: () => { this.showChatPalette(gameObject) }, disabled: gameObject.location.name === 'graveyard' });
     //}
-    actions.push({ name: 'スタンド設定', action: () => { this.showStandSetting(gameObject) } });
+    actions.push({ name: 'スタンド設定...', action: () => { this.showStandSetting(gameObject) } });
     actions.push(ContextMenuSeparator);
     actions.push({
       name: '参照URLを開く', action: null,

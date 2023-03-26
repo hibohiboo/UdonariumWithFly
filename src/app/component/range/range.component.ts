@@ -575,12 +575,12 @@ export class RangeComponent implements OnInit, OnDestroy, AfterViewInit {
         menuArray.push(
           this.range.isFollowAltitude
           ? {
-            name: '☑ 高さにも追従', action: () => {
+            name: '☑ 高さ・高度にも追従', action: () => {
               this.range.isFollowAltitude = false;
             }
           }
           : {
-            name: '☐ 高さにも追従', action: () => {
+            name: '☐ 高さ・高度にも追従', action: () => {
               this.range.isFollowAltitude = true;
               if (this.followingCharactor) this.range.following();
             }
@@ -638,7 +638,7 @@ export class RangeComponent implements OnInit, OnDestroy, AfterViewInit {
     });
     menuArray.push(ContextMenuSeparator);
     menuArray.push(
-      { name: '射程・範囲を編集', action: () => { this.showDetail(this.range); } }
+      { name: '射程・範囲を編集...', action: () => { this.showDetail(this.range); } }
     );
     if (this.range.getUrls().length > 0) {
       menuArray.push(

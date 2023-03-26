@@ -1,7 +1,7 @@
 import { AfterViewInit, Component, NgZone, OnDestroy, OnInit, ViewChild, ViewContainerRef } from '@angular/core';
 
 import { ChatTabList } from '@udonarium/chat-tab-list';
-import { AudioPlayer } from '@udonarium/core/file-storage/audio-player';
+import { AudioPlayer, VolumeType } from '@udonarium/core/file-storage/audio-player';
 import { AudioSharingSystem } from '@udonarium/core/file-storage/audio-sharing-system';
 import { AudioStorage } from '@udonarium/core/file-storage/audio-storage';
 import { FileArchiver } from '@udonarium/core/file-storage/file-archiver';
@@ -55,6 +55,8 @@ import { CutInList } from '@udonarium/cut-in-list';
 import { ConfirmationComponent, ConfirmationType } from 'component/confirmation/confirmation.component';
 import { SwUpdate } from '@angular/service-worker';
 
+import * as localForage from 'localforage';
+
 @Component({
   selector: 'app-root',
   templateUrl: './app.component.html',
@@ -73,7 +75,31 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   isLoggedin = false;
   isUpdateCanceled = false;
   
+  private noticeIntervalTimer: NodeJS.Timer = null;
+
   get otherPeers(): PeerCursor[] { return ObjectStore.instance.getObjects(PeerCursor); }
+
+  private static _noticePlayer: AudioPlayer;
+  static get noticePlayer(): AudioPlayer {
+    if (!AppComponent._noticePlayer) {
+      AppComponent._noticePlayer = new AudioPlayer();
+      AppComponent._noticePlayer.volumeType = VolumeType.NOTICE;
+    }
+    return AppComponent._noticePlayer;
+  }
+ 
+  notice(audioIdentifier=PresetSound.puyon) {
+    const audio = AudioStorage.instance.get(audioIdentifier);
+    if (audio && audio.isReady) {
+      EventSystem.unregister(this, 'UPDATE_AUDIO_RESOURE');
+      AppComponent.noticePlayer.play(audio);
+    } else {
+      EventSystem.register(this)
+      .on('UPDATE_AUDIO_RESOURE', -100, event => {
+        this.notice(audioIdentifier);
+      });
+    }
+  }
 
   constructor(
     private swUpdate: SwUpdate,
@@ -143,6 +169,27 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     let standNoIconImage = ImageStorage.instance.add(fileContext);
     ImageTag.create(standNoIconImage.identifier).tag = '*default スタンド';
 
+    try {
+      localForage.getItem(AudioPlayer.MAIN_VOLUME_LOCAL_STORAGE_KEY).then(volume => { 
+        if (typeof volume === 'number' && 0 <= volume && volume <= 1) AudioPlayer.volume = volume;
+      });
+      localForage.getItem(AudioPlayer.AUDITION_VOLUME_LOCAL_STORAGE_KEY).then(volume => {
+        if (typeof volume === 'number' && 0 <= volume && volume <= 1) AudioPlayer.auditionVolume = volume;
+      });
+      localForage.getItem(AudioPlayer.SOUND_EFFECT_VOLUME_LOCAL_STORAGE_KEY).then(volume => {
+        if (typeof volume === 'number' && 0 <= volume && volume <= 1) AudioPlayer.soundEffectVolume = volume;
+      });
+      localForage.getItem(AudioPlayer.NOTICE_VOLUME_LOCAL_STORAGE_KEY).then(volume => {
+        if (typeof volume === 'number' && 0 <= volume && volume <= 1) AudioPlayer.noticeVolume = volume;
+      });
+      localForage.getItem(AudioPlayer.MAIN_IS_MUTE_LOCAL_STORAGE_KEY).then(isMute => AudioPlayer.isMute = !!isMute);
+      localForage.getItem(AudioPlayer.AUDITION_IS_MUTE_LOCAL_STORAGE_KEY).then(isMute => AudioPlayer.isAuditionMute = !!isMute);
+      localForage.getItem(AudioPlayer.SOUND_EFFECT_IS_MUTE_LOCAL_STORAGE_KEY).then(isMute => AudioPlayer.isSoundEffectMute = !!isMute);
+      localForage.getItem(AudioPlayer.NOTICE_IS_MUTE_LOCAL_STORAGE_KEY).then(isMute => AudioPlayer.isNoticeMute = !!isMute);
+    } catch(e) {
+      console.log(e);
+    }
+
     AudioPlayer.resumeAudioContext();
     PresetSound.dicePick = AudioStorage.instance.add('./assets/sounds/soundeffect-lab/shoulder-touch1.mp3').identifier;
     PresetSound.dicePut = AudioStorage.instance.add('./assets/sounds/soundeffect-lab/book-stack1.mp3').identifier;
@@ -182,9 +229,10 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     AudioStorage.instance.get(PresetSound.surprise).isHidden = true;
     AudioStorage.instance.get(PresetSound.coinToss).isHidden = true;
 
-    PeerCursor.createMyCursor();
-    if (!PeerCursor.myCursor.name) PeerCursor.myCursor.name = 'プレイヤー';
-    PeerCursor.myCursor.imageIdentifier = noneIconImage.identifier;
+    PeerCursor.createMyCursor().then(() => {
+      if (PeerCursor.myCursor.name == null || PeerCursor.myCursor.name === '') PeerCursor.myCursor.name = PeerCursor.CHAT_DEFAULT_NAME;
+      if (!PeerCursor.myCursor.imageIdentifier) PeerCursor.myCursor.imageIdentifier = noneIconImage.identifier;
+    });
 
     EventSystem.register(this)
       .on('UPDATE_GAME_OBJECT', event => { this.lazyNgZoneUpdate(event.isSendFromSelf); })
@@ -358,6 +406,43 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
         this.lazyNgZoneUpdate(event.isSendFromSelf);
         if (event.isSendFromSelf) this.isLoggedin = false;
       })
+      .on('MESSAGE_NORTIFICATION', event => {
+        //console.log(event)
+        /* ペンディング
+        try {
+          Notification.requestPermission().then((permission) => {
+            if (permission === 'granted') {
+              const tab = <ChatTab>ObjectStore.instance.get(event.data.tabIdentifier);
+              const message = <ChatMessage>ObjectStore.instance.get(event.data.messageIdentifier);
+              if (tab && message) {
+                const option: { body: string, icon?: string, tag?: string } = { body: message.plainText(), tag: 'chat-message' };
+                const image = message.image;
+                if (image) option.icon = message.image.url;
+                const notification = new Notification(tab.name + ' - ' + message.name + (message.toColor ? (' ➡ ' + message.toName + ' (秘匿)') : ''), option);
+                document.addEventListener('visibilitychange', () => {
+                  if (document.visibilityState === 'visible') notification.close();
+                });
+              }
+            }
+          });
+        } catch(e) {
+          console.log(e);
+        }
+        */
+        // UIコンポーネントに設定持たせるべきか
+        if (ChatWindowComponent.isNoticeOn) {
+          if (!this.noticeIntervalTimer) {
+            this.noticeIntervalTimer = setTimeout(() => {
+              clearTimeout(this.noticeIntervalTimer);
+              this.noticeIntervalTimer = null;
+            }, 100);
+            this.notice();
+          }
+        } else if (this.noticeIntervalTimer) {
+          clearTimeout(this.noticeIntervalTimer);
+          this.noticeIntervalTimer = null;
+        }
+      })
       .on('PLAY_CUT_IN', -1000, event => {
         let cutIn = ObjectStore.instance.get<CutIn>(event.data.identifier);
         this.cutInService.play(cutIn, event.data.secret ? event.data.secret : false, event.data.test ? event.data.test : false, event.data.sender);
@@ -381,11 +466,9 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       });
   }
   
-  private static readonly beforeUnloadProc = (evt) => {
-    // Cancel the event as stated by the standard.
-    evt.preventDefault();
-    // Chrome requires returnValue to be set.
-    evt.returnValue = '';
+  private static readonly beforeUnloadProc = (event) => {
+    event.preventDefault();
+    event.returnValue = '';
   };
 
   ngOnInit() {
@@ -398,20 +481,29 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       this.panelService.open(PeerMenuComponent, { width: 520, height: 450, left: 100 });
       this.panelService.open(ChatWindowComponent, { width: 700, height: 400, left: 100, top: 450 });
     });
-
-    this.swUpdate.versionUpdates.subscribe(evt => {
-      switch (evt.type) {
+    
+    // PWA
+    this.swUpdate.versionUpdates.subscribe(event => {
+      switch (event.type) {
         case 'VERSION_DETECTED':
-          console.log(`Downloading new app version: ${evt.version.hash}`);
+          console.log(`Downloading new app version: ${event.version.hash}`);
+          Notification.requestPermission().then((permission) => {
+            if (permission === 'granted') {
+              new Notification('Udonarium with Fly', { 
+                body: 'Udonarium with Fly の新しいバージョンをダウンロード中です。',
+                icon: 'card.png'
+              });
+            }
+          });
           break;
         case 'VERSION_READY':
-          console.log(`Current app version: ${evt.currentVersion.hash}`);
-          console.log(`New app version ready for use: ${evt.latestVersion.hash}`);
+          console.log(`Current app version: ${event.currentVersion.hash}`);
+          console.log(`New app version ready for use: ${event.latestVersion.hash}`);
           if (!this.isUpdateCanceled) {
             this.modalService.open(ConfirmationComponent, {
               title: 'Udonarium with Fly の更新', 
-              text: 'Udonarium with Fly の新しいバージョンが公開されています。更新を行いますか？',
-              help: '更新の際にページを再読み込みします。手動で再読み込みを行うことでも更新可能です。',
+              text: 'Udonarium with Fly の新しいバージョンをダウンロードしました。更新を行いますか？',
+              helpHtml: '<b style="color: red">更新の際にページを再読み込みします。</b>あとで手動で再読み込みを行うことでも更新可能です。',
               type: ConfirmationType.OK_CANCEL,
               materialIcon: 'browser_updated',
               action: () => {
@@ -427,7 +519,7 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
           }
           break;
         case 'VERSION_INSTALLATION_FAILED':
-          console.log(`Failed to install app version '${evt.version.hash}': ${evt.error}`);
+          console.log(`Failed to install app version '${event.version.hash}': ${event.error}`);
           break;
       }
     });
@@ -435,6 +527,7 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
 
   ngOnDestroy() {
     EventSystem.unregister(this);
+    if (this.noticeIntervalTimer) clearTimeout(this.noticeIntervalTimer);
   }
 
   open(componentName: string) {
@@ -462,6 +555,7 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
         break;
       case 'JukeboxComponent':
         component = JukeboxComponent;
+        option.height = 540;
         break;
       case 'GameCharacterGeneratorComponent':
         component = GameCharacterGeneratorComponent;
@@ -536,7 +630,13 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     }
   }
 
-  toolBox() {
+  toolBox(event: Event) {
+    const button = <HTMLElement>event.target;
+    const clientRect = button.getBoundingClientRect();
+    const position = { 
+      x: window.pageXOffset + clientRect.left + (this.isHorizontal ? 0 : button.clientWidth * 0.9), 
+      y: window.pageYOffset + clientRect.top + (this.isHorizontal ? button.clientHeight * 0.9 : 0)
+    };
     const menu = [];
     const cunIns = CutInList.instance.cutIns;
     menu.push({ name: 'カットイン再生', materialIcon: 'play_arrow',
@@ -584,33 +684,51 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
       })
     });
     menu.push(ContextMenuSeparator);
-    menu.push({ name: 'カットイン設定', materialIcon: 'movie_creation', action: () => this.open('CutInSettingComponent') });
-    menu.push({ name: 'ダイスボット表設定', materialIcon: 'table_rows', action: () => this.open('DiceRollTableSettingComponent') })
-    this.contextMenuService.open(this.pointerDeviceService.pointers[0], menu, 'ツールボックス');
+    menu.push({ name: 'カットイン設定...', materialIcon: 'movie_creation', action: () => this.open('CutInSettingComponent') });
+    menu.push({ name: 'ダイスボット表設定...', materialIcon: 'table_rows', action: () => this.open('DiceRollTableSettingComponent') })
+    this.contextMenuService.open(position, menu, 'ツールボックス');
   }
 
-  resetPointOfView() {
-    this.contextMenuService.open(this.pointerDeviceService.pointers[0], [
+  resetPointOfView(event: Event) {
+    const button = <HTMLElement>event.target;
+    const clientRect = button.getBoundingClientRect();
+    const position = { 
+      x: window.pageXOffset + clientRect.left + (this.isHorizontal ? 0 : button.clientWidth * 0.9), 
+      y: window.pageYOffset + clientRect.top + (this.isHorizontal ? button.clientHeight * 0.9 : 0)
+    };
+    this.contextMenuService.open(position, [
       { name: '初期視点に戻す', action: () => EventSystem.trigger('RESET_POINT_OF_VIEW', null) },
       { name: '真上から視る', action: () => EventSystem.trigger('RESET_POINT_OF_VIEW', 'top') }
     ], '視点リセット');
   }
 
-  standSetteings() {
+  standSetteings(event: Event) {
+    const button = <HTMLElement>event.target;
+    const clientRect = button.getBoundingClientRect();
+    const position = { 
+      x: window.pageXOffset + clientRect.left + (this.isHorizontal ? 0 : button.clientWidth * 0.9), 
+      y: window.pageYOffset + clientRect.top + (this.isHorizontal ? button.clientHeight * 0.9 : 0)
+    };
     const isShowStand = StandImageComponent.isShowStand;
     const isShowNameTag = StandImageComponent.isShowNameTag;
     const isCanBeGone = StandImageComponent.isCanBeGone; 
-    this.contextMenuService.open(this.pointerDeviceService.pointers[0], [
+    this.contextMenuService.open(position, [
       { name: `${ TableSelecter.instance.gridShow ? '☑' : '☐' }テーブルグリッドを常に表示`, 
-      action: () => {
-        TableSelecter.instance.gridShow = !TableSelecter.instance.gridShow;
-        EventSystem.trigger('UPDATE_GAME_OBJECT', TableSelecter.instance.toContext()); 
-      }
+        action: () => {
+          TableSelecter.instance.gridShow = !TableSelecter.instance.gridShow;
+          EventSystem.trigger('UPDATE_GAME_OBJECT', TableSelecter.instance.toContext()); 
+        }
       },
       { name: `${ TableSelecter.instance.gridSnap ? '☑' : '☐' }オブジェクト移動時にスナップ`, 
-      action: () => {
-        TableSelecter.instance.gridSnap = !TableSelecter.instance.gridSnap;
-      }
+        action: () => {
+          TableSelecter.instance.gridSnap = !TableSelecter.instance.gridSnap;
+        }
+      },
+      ContextMenuSeparator,
+      { name: `${ ChatWindowComponent.isNoticeOn ? '☑' : '☐' }チャット受信時に音で通知`, 
+        action: () => {
+          ChatWindowComponent.isNoticeOn = !ChatWindowComponent.isNoticeOn;
+        }
       },
       ContextMenuSeparator,
       { name: `${ isShowStand ? '☑' : '☐' }スタンド表示`, 

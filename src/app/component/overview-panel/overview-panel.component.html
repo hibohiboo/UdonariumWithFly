@@ -34,7 +34,7 @@
   <div class="component-content is-small-size"
     [ngClass]="{ 'is-pointer-events-auto': !this.isPointerDragging, 'pointer-events-none': this.isPointerDragging }">
     <div *ngIf="hasImage" style="position: relative;">
-      <div *ngIf="(card.aliasName == 'card' && (card.isFront || card.isHand || card.isGMMode)) || (card.aliasName == 'card-stack' && card.topCard.isFront)"
+      <div *ngIf="(card.aliasName == 'card' && !(cardState === CardStateBack) && (cardState == CardStateFront || card.isFront || card.isHand || card.isGMMode)) || (card.aliasName == 'card-stack' && card.topCard.isFront)"
         class="text" style="z-index: 5; top: 8px"
         [style.width.px]="imageAreaRect.width" [style.height.px]="imageAreaRect.height" [style.left.px]="imageAreaRect.left" 
         [ngStyle]="{transform: 'scale(' + imageAreaRect.scale + ')'}">
@@ -51,8 +51,8 @@
     </div>
     <div class="component-title title-background"
       [ngClass]="{'with-button-marign': hasImage}">
-      <ng-container *ngIf="card.isVisible == null || card.isVisible || card.isGMMode">{{card.name}}</ng-container><ng-container *ngIf="card.aliasName == 'card-stack' && !card.isEmpty"> のトップ</ng-container>
-      <ng-container *ngIf="card.isVisible != null && !card.isVisible && !card.isGMMode">カード（裏面）</ng-container>
+      <ng-container *ngIf="!(cardState === CardStateBack) && (cardState === CardStateFront || card.isVisible == null || card.isVisible || card.isGMMode)">{{card.name}}</ng-container><ng-container *ngIf="card.aliasName == 'card-stack' && !card.isEmpty"> のトップ</ng-container>
+      <ng-container *ngIf="!(cardState === CardStateFront) && (cardState === CardStateBack || (card.isVisible != null && !card.isVisible && !card.isGMMode))">カード（裏面）</ng-container>
     </div>
     <div class="component-background">
       <div class="grid-container-root" *ngIf="hasDataElms && (card.isVisible || card.isGMMode)">
@@ -112,7 +112,7 @@
       <div class="grid-container-root" *ngIf="hasDataElms">
         <!--<ng-container *ngFor="let dataElm of dataElms">-->
         <ng-container *ngFor="let dataElm of inventoryDataElms">
-          <ng-container *ngIf="dataElm && dataElm.name !== newLineString">
+          <ng-container *ngIf="dataElm && !newLineStrings.includes(dataElm.name)">
             <div class="grid-container">
               <ng-container *ngTemplateOutlet="dataElement; context: { dataElm: dataElm, name: character.name }"></ng-container>
             </div>
@@ -149,7 +149,7 @@
       <div class="grid-container-root" *ngIf="hasDataElms && dice.isVisible">
         <div class="grid-container">
           <ng-container *ngFor="let dataElm of dataElms">
-            <ng-container *ngIf="dataElm && dataElm.name !== newLineString">
+            <ng-container *ngIf="dataElm && !newLineStrings.includes(dataElm.name)">
               <ng-container *ngTemplateOutlet="dataElement; context: { dataElm: dataElm, name: dice.name }"></ng-container>
             </ng-container>
           </ng-container>
@@ -213,7 +213,7 @@
           </ng-container>
           <div *ngIf="dataElms.length > 0" class="section border" style="padding-top: 2px"></div>
           <ng-container *ngFor="let dataElm of dataElms">
-            <ng-container *ngIf="dataElm && dataElm.name !== newLineString">
+            <ng-container *ngIf="dataElm && !newLineStrings.includes(dataElm.name)">
               <ng-container *ngTemplateOutlet="dataElement; context: { dataElm: dataElm, name: range.name }"></ng-container>
             </ng-container>
           </ng-container>
@@ -236,7 +236,7 @@
       <div class="grid-container-root">
         <div class="grid-container">
           <ng-container *ngFor="let dataElm of dataElms">
-            <ng-container *ngIf="dataElm && dataElm.name !== newLineString">
+            <ng-container *ngIf="dataElm && !newLineStrings.includes(dataElm.name)">
               <ng-container *ngTemplateOutlet="dataElement; context: { dataElm: dataElm, name: object.name }"></ng-container>
             </ng-container>
           </ng-container>
@@ -294,7 +294,7 @@
         </div>
       </ng-container>
       <ng-container *ngSwitchCase="'checkProperty'">
-        <div class="tag" [attr.title]="dataElm.name"><span [style.textDecoration]="dataElm.value ? 'none' : 'line-through'">{{dataElm.name}}</span> {{ dataElm.currentValue.toString().split(checkRegExp)[ dataElm.value ? 0 : 1 ] }}</div>
+        <div class="tag" [attr.title]="dataElm.name"><span [style.textDecoration]="dataElm.value ? 'none' : 'line-through'">{{dataElm.name}}</span> {{ checkValue(dataElm) }}</div>
         <div class="value">
           <input appLogging [logging.name]="name" [logging.dataElement]="dataElm" [logging.disable]="isNoLogging" type="checkbox" style="width: 2em; margin-right:1em" [(ngModel)]="dataElm.value" checked="{{dataElm.value ? 'checked' : ''}}" (change)="dataElm.value = (dataElm.value ? dataElm.name : '')">
         </div>
@@ -329,7 +329,7 @@
 
 <ng-template #imageView>
   <div class="image-view-background is-fill" (click)="chanageImageView(false)" [@fadeInOut]="'in'">
-    <div *ngIf="(tabletopObject.aliasName == 'card' && (tabletopObject.isFront || tabletopObject.isHand || tabletopObject.isGMMode)) || (tabletopObject.aliasName == 'card-stack' && tabletopObject.topCard.isFront)"
+    <div *ngIf="(tabletopObject.aliasName == 'card' && !(cardState === CardStateBack) && (cardState == CardStateFront || tabletopObject.isFront || tabletopObject.isHand || tabletopObject.isGMMode)) || (tabletopObject.aliasName == 'card-stack' && tabletopObject.topCard.isFront)"
       class="text" style="z-index: 5"
       [style.width.px]="fullImageAreaRect.width" [style.height.px]="fullImageAreaRect.height" [style.left.px]="fullImageAreaRect.left" [style.top.px]="fullImageAreaRect.top"
       [ngStyle]="{transform: 'scale(' + fullImageAreaRect.scale + ')'}">

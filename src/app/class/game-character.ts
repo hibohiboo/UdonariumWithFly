@@ -34,9 +34,9 @@ export class GameCharacter extends TabletopObject {
   get size(): number { return this.getCommonValue('size', 1); }
   get height(): number {
     let element = this.getElement('height', this.commonDataElement);
-    if (!element && this.commonDataElement) {
-      this.commonDataElement.insertBefore(DataElement.create('height', 0, { 'currentValue': '' }, 'height_' + this.identifier), this.getElement('altitude', this.commonDataElement));
-    }
+    //if (!element && this.commonDataElement) {
+    //  this.commonDataElement.insertBefore(DataElement.create('height', 0, { 'currentValue': '' }, 'height_' + this.identifier), this.getElement('altitude', this.commonDataElement));
+    //}
     let num = element ? +element.value : 0;
     if (element && element.currentValue) num = (Number.isNaN(num) ? 0 : num) * this.size;
     return Number.isNaN(num) ? 0 : num;
@@ -86,6 +86,17 @@ export class GameCharacter extends TabletopObject {
       if (character.isHideIn && character.isVisible && character.location.name === 'table') return true;
     }
     return false;
+  }
+
+  complement(): void {
+    let element = this.getElement('altitude', this.commonDataElement);
+    if (!element && this.commonDataElement) {
+      this.commonDataElement.appendChild(DataElement.create('altitude', 0, {}, 'altitude_' + this.identifier));
+    }
+    element = this.getElement('height', this.commonDataElement);
+    if (!element && this.commonDataElement) {
+      this.commonDataElement.insertBefore(DataElement.create('height', 0, { 'currentValue': '' }, 'height_' + this.identifier), this.getElement('altitude', this.commonDataElement));
+    }
   }
 
   createTestGameDataElement(name: string, size: number, imageIdentifier: string) {
@@ -147,9 +158,12 @@ export class GameCharacter extends TabletopObject {
     palette.setPalette(`チャットパレット入力例：
 2d6+1 ダイスロール
 １ｄ２０＋{敏捷}＋｛格闘｝　{name}の格闘！
+:HP={最大HP} HPフル回復！
+:ｍｐ-{消費Ｍｐ} 2d20KH1+{器用度}+2>=15 《{Lv1}》を使用　MP-{消費MP}
 //敏捷=10+{敏捷A}
 //敏捷A=10
-//格闘＝１`);
+//格闘＝１
+//消費MP=１６`);
     palette.initialize();
     this.appendChild(palette);
 

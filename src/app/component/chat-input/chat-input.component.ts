@@ -25,6 +25,7 @@ import { StandSettingComponent } from 'component/stand-setting/stand-setting.com
 import { PeerMenuComponent } from 'component/peer-menu/peer-menu.component';
 import { ChatTab } from '@udonarium/chat-tab';
 import { CutInList } from '@udonarium/cut-in-list';
+import { DiceRollTableList } from '@udonarium/dice-roll-table-list';
 
 interface StandGroup {
   name: string,
@@ -349,43 +350,211 @@ export class ChatInputComponent implements OnInit, OnDestroy {
 
     let text = this.text;
     let matchMostLongText = '';
-    // スタンド
     let standIdentifier = null;
-    // 空文字でもスタンド反応するのは便利かと思ったがメッセージ送信後にもう一度エンター押すだけで誤爆するので指定時のみ
-    if (this.character && (StringUtil.cr(text).trim() || this.standName)) {
-      text = this.character.chatPalette.evaluate(this.text, this.character.rootDataElement);
-      // 立ち絵
-      if (this.character.standList) {
-        let imageIdentifier = null;
-        if (this.isUseFaceIcon && this.character.faceIcon) {
-          imageIdentifier = this.character.faceIcon.identifier;
-        } else {
-          imageIdentifier = this.character.imageFile ? this.character.imageFile.identifier : null;
-        }
-        const standInfo = this.character.standList.matchStandInfo(text, imageIdentifier, this.standName);
-        if (this.isUseStandImage && this.isUseStandImageOnChatTab) {
-          if (standInfo.farewell) {
-            this.farewellStand();
-          } else if (standInfo.standElementIdentifier) {
-            standIdentifier = standInfo.standElementIdentifier;
-            const sendObj = {
-              characterIdentifier: this.character.identifier, 
-              standIdentifier: standInfo.standElementIdentifier, 
-              color: this.character.chatPalette ? this.character.chatPalette.color : PeerCursor.CHAT_DEFAULT_COLOR,
-              secret: this.sendTo ? true : false
-            };
-            if (sendObj.secret) {
-              const targetPeer = ObjectStore.instance.get<PeerCursor>(this.sendTo);
-              if (targetPeer) {
-                if (targetPeer.peerId != PeerCursor.myCursor.peerId) EventSystem.call('POPUP_STAND_IMAGE', sendObj, targetPeer.peerId);
-                EventSystem.call('POPUP_STAND_IMAGE', sendObj, PeerCursor.myCursor.peerId);
+
+    if (this.character) text = this.character.chatPalette.evaluate(text, this.character.rootDataElement);
+    // ステータス操作
+    if (text && /^[\\￥]+[:：]/.test(text)) {
+      // コマンド全体のエスケープ
+      text = text.replace(/[\\￥]([:：])/, '$1');
+    } else if (text && StringUtil.toHalfWidth(text).startsWith(':')) {
+      // 切り出し
+      //console.log(StringUtil.parseCommands(text.substring(1)));
+      const commandsInfo = StringUtil.parseCommands(text.substring(1));
+      text = commandsInfo.endString;
+      //let loggingTexts = [];
+      if (!this.character) {
+        this.chatMessageService.sendOperationLog('コマンドエラー：対象がキャラクターではない');
+      } else {
+        if (commandsInfo.commands.length) {
+          (async () => {
+            const loggingTexts: string[] = [`${this.character.name == '' ? '(無名のキャラクター)' : this.character.name} へのコマンド：${commandsInfo.commandString}`];
+            for (let i = 0; i < commandsInfo.commands.length; i++) {
+              let rollResult = null;
+              // ステータス操作のみ
+                try {
+                const command = commandsInfo.commands[i];
+                if (command.isIncomplete) throw '→ コマンドエラー：コマンド不完全：' + command.targetName;
+
+                const targetName = command.targetName;
+                const operator = StringUtil.toHalfWidth(command.operator);
+                const operateValue = command.value;
+                let oldValue;
+                let target;
+                let isOperateNumber = false;
+                let isOperateMaxValue = false;
+
+                if (target = this.character.detailDataElement.getFirstElementByNameUnsensitive(targetName)) {
+                  if (target.isNumberResource || target.isSimpleNumber || target.isAbilityScore) isOperateNumber = true;
+                } else if (
+                  target = this.character.detailDataElement.getFirstElementByNameUnsensitive(targetName, /^最大/)
+                  || this.character.detailDataElement.getFirstElementByNameUnsensitive(targetName, /^Max[\:\_\-\s]*/i)
+                  || this.character.detailDataElement.getFirstElementByNameUnsensitive(targetName, /^初期/)
+                  || this.character.detailDataElement.getFirstElementByNameUnsensitive(targetName, /初期値$/)
+                  || this.character.detailDataElement.getFirstElementByNameUnsensitive(targetName, /最大値$/)
+                  || this.character.detailDataElement.getFirstElementByNameUnsensitive(targetName, /^基本/)
+                  || this.character.detailDataElement.getFirstElementByNameUnsensitive(targetName, /^原/)
+                  || this.character.detailDataElement.getFirstElementByNameUnsensitive(targetName, /\^$/)
+                  || this.character.detailDataElement.getFirstElementByNameUnsensitive(targetName, /基本値$/)
+                  || this.character.detailDataElement.getFirstElementByNameUnsensitive(targetName, /原点$/)
+                ) {
+                  if (target.isNumberResource || target.isAbilityScore) {
+                    isOperateNumber = true;
+                    isOperateMaxValue = true;
+                  } else {
+                    target = null;
+                  }
+                }
+                
+                if (!target) throw `→ コマンドエラー：${(StringUtil.cr(targetName).trim() == '') ? '(無名の変数)' : StringUtil.cr(targetName).trim()} は見つからなかった`;
+
+                oldValue = target.loggingValue;
+                let value = null;
+                if (command.isEscapeRoll || operator === '>') {
+                  value = operateValue;
+                } else {
+                  const testHalfWidthText = StringUtil.toHalfWidth(operateValue.replace(/[―ー—‐]/g, '-')).trim();
+                  //const rollText = StringUtil.toHalfWidth(operateValue.replace(/[ⅮÐ]/g, 'D').replace(/\×/g, '*').replace(/\÷/g, '/').replace(/[―ー—‐]/g, '-')).trim();
+                  if (StringUtil.cr(testHalfWidthText) == '') {
+                    value = '';
+                  } else {
+                    if (/^[\+\-]?\d+$/.test(testHalfWidthText)) {
+                      value = parseInt(testHalfWidthText);
+                    } else if (/^[\d\+\-\*\/\(\)]+$/.test(testHalfWidthText.replace(/[ⅮÐ]/g, 'D').replace(/\×/g, '*').replace(/\÷/g, '/'))) {
+                      rollResult = await DiceBot.rollCommandAsync(`C(${testHalfWidthText.replace(/[ⅮÐ]/g, 'D').replace(/\×/g, '*').replace(/\÷/g, '/')})`, this.gameType ? this.gameType : 'DiceBot');
+                    } else if (/^[cＣｃ][hＨｈ][oＯｏ][iＩｉ][cＣｃ][eＥｅ]/i.test(operateValue) || /^[a-zA-Z0-9!-/:-@¥[-`{-~\}]+$/.test(testHalfWidthText.replace(/[ⅮÐ]/g, 'D').replace(/\×/g, '*').replace(/\÷/g, '/'))
+                      || DiceRollTableList.instance.diceRollTables.some(diceRollTable => diceRollTable.command != null && (new RegExp('^' + StringUtil.toHalfWidth(diceRollTable.command.replace(/[―ー—‐]/g, '-')).toUpperCase().trim() + '([=+\\-]\\d*)?$')).test(testHalfWidthText.toUpperCase()))) {
+                      rollResult = await DiceBot.rollCommandAsync(operateValue, this.gameType ? this.gameType : 'DiceBot');
+                    } else {
+                      value = operateValue;
+                    }
+                    if (rollResult) {
+                      //console.log(rollResult.result)
+                      let match = null;
+                      if (isOperateNumber && rollResult.result.length > 0 && (match = rollResult.result.match(/\s＞\s(?:成功数|計算結果)?(\-?\d+)$/))) {
+                        value = match[1];
+                      } else if (target.isCheckProperty) {
+                        value = rollResult.isSuccess ? '1' : '0';
+                      } else if (rollResult.result.length > 0) {
+                        value = rollResult.isDiceRollTable ? rollResult.result.split(/\s＞\s/).slice(1).join('') : rollResult.result.split(/\s＞\s/).slice(-1)[0];
+                      }
+                    }
+                  }
+                }
+                //console.log(value)
+                if (value == null 
+                  || (rollResult && rollResult.isDiceRollTable && rollResult.isFailure) 
+                  || (isOperateNumber && value !== '' && isNaN(value))) {
+                  throw `→ ${target.name == '' ? '(無名の変数)' : target.name} を操作 → コマンドエラー：` + command.operator + command.value;
+                } else if (target.isUrl && !StringUtil.validUrl(StringUtil.cr(value))) {
+                  throw `→ ${target.name == '' ? '(無名の変数)' : target.name} を操作 → URL不正：` + command.value;
+                }
+
+                if (operator === '>') {
+                  if (isOperateNumber) {
+                    if (value != '') {
+                      if (target.isNumberResource && !isOperateMaxValue) {
+                        target.currentValue = parseInt(value);
+                      } else {
+                        target.value = parseInt(value);
+                      }
+                    }
+                  } else if (target.isCheckProperty) {
+                    target.value = (value == '' || parseInt(value) == 0 || StringUtil.toHalfWidth(value).toLowerCase() === 'off') ? '' : target.name;
+                  } else if (target.isNote || target.isUrl) {
+                    target.value = StringUtil.cr(value);
+                  } else {
+                    target.value = StringUtil.cr(value).replace(/(:?\r\n|\r|\n)/, ' ');
+                  }
+                } else if (target.isNumberResource && !isOperateMaxValue) {
+                  if (value != '') target.currentValue = parseInt(target.currentValue && operator !== '=' ? target.currentValue : '0') + (parseInt(value) * (operator === '-' ? -1 : 1));
+                } else if (isOperateNumber) {
+                  if (value != '') target.value = parseInt(target.value && operator !== '=' ? target.value : '0') + (parseInt(value) * (operator === '-' ? -1 : 1));
+                } else if (target.isCheckProperty && operator == '=') {
+                  target.value = (value == '' || parseInt(value) == 0 || StringUtil.toHalfWidth(value).toLowerCase() === 'off') ? '' : target.name;
+                } else if (operator === '=') {
+                  if (target.isNote || target.isUrl) {
+                    target.value = (isNaN(value) || target.isUrl) ? StringUtil.cr(value) : parseInt(value);
+                  } else {
+                    target.value = isNaN(value) ? StringUtil.cr(value).replace(/(:?\r\n|\r|\n)/, ' ') : parseInt(value);
+                  }
+                } else {
+                  throw `→ ${target.name == '' ? '(無名の変数)' : target.name} を操作 → コマンドエラー：` + command.operator + command.value;
+                }
+                const newValue = target.loggingValue;
+
+                let loggingText = `→ ${target.name == '' ? '(無名の変数)' : target.name} を操作`;
+                if (isOperateNumber) {
+                  loggingText += ` ${oldValue} → ${oldValue === newValue ? '変更なし' : newValue}`;
+                } else if (target.isCheckProperty) {
+                  loggingText += `${oldValue === newValue ? ' 変更なし' : newValue}`
+                } else {
+                  loggingText += ` "${oldValue}" → ${oldValue === newValue ? '変更なし' : '"' + newValue + '"'}`;
+                }
+                if (rollResult) {
+                  if (rollResult.isDiceRollTable) {
+                    loggingText += ` (${rollResult.tableName}：${rollResult.isEmptyDice ? '' : '🎲'}${rollResult.result.split(/\s＞\s/)[0]})`;
+                  } else {
+                    loggingText += ` (${ rollResult.result.split(/\s＞\s/g).map((str, j) => (j == 0 ? (rollResult.isEmptyDice ? '' : '🎲' + '：' + str.replace(/^c?\(/i, '').replace(/\)$/, '')) : str)).join(' → ') })`;
+                  }
+                  if (!rollResult.isEmptyDice) {
+                    if (Math.random() < 0.5) {
+                      SoundEffect.play(PresetSound.diceRoll1);
+                    } else {
+                      SoundEffect.play(PresetSound.diceRoll2);
+                    }
+                  }
+                }
+                loggingTexts.push(loggingText);
+              } catch (error) {
+                // 横着、例外設計すべき
+                if (error instanceof Error) throw error;
+                loggingTexts.push(error);
+                continue;
               }
-            } else {
-              EventSystem.call('POPUP_STAND_IMAGE', sendObj);
+            }
+            if (loggingTexts.length) this.chatMessageService.sendOperationLog(loggingTexts.join("\n"));
+          })();
+        }
+      }
+    }
+    if (this.character) {
+      // スタンド
+      // 空文字でもスタンド反応するのは便利かと思ったがメッセージ送信後にもう一度エンター押すだけで誤爆するので指定時のみ
+      if (StringUtil.cr(text).trim() || this.standName) {
+        // 立ち絵
+        if (this.character.standList) {
+          let imageIdentifier = null;
+          if (this.isUseFaceIcon && this.character.faceIcon) {
+            imageIdentifier = this.character.faceIcon.identifier;
+          } else {
+            imageIdentifier = this.character.imageFile ? this.character.imageFile.identifier : null;
+          }
+          const standInfo = this.character.standList.matchStandInfo(text, imageIdentifier, this.standName);
+          if (this.isUseStandImage && this.isUseStandImageOnChatTab) {
+            if (standInfo.farewell) {
+              this.farewellStand();
+            } else if (standInfo.standElementIdentifier) {
+              standIdentifier = standInfo.standElementIdentifier;
+              const sendObj = {
+                characterIdentifier: this.character.identifier, 
+                standIdentifier: standInfo.standElementIdentifier, 
+                color: this.character.chatPalette ? this.character.chatPalette.color : PeerCursor.CHAT_DEFAULT_COLOR,
+                secret: this.sendTo ? true : false
+              };
+              if (sendObj.secret) {
+                const targetPeer = ObjectStore.instance.get<PeerCursor>(this.sendTo);
+                if (targetPeer) {
+                  if (targetPeer.peerId != PeerCursor.myCursor.peerId) EventSystem.call('POPUP_STAND_IMAGE', sendObj, targetPeer.peerId);
+                  EventSystem.call('POPUP_STAND_IMAGE', sendObj, PeerCursor.myCursor.peerId);
+                }
+              } else {
+                EventSystem.call('POPUP_STAND_IMAGE', sendObj);
+              }
             }
           }
+          matchMostLongText = standInfo.matchMostLongText;
         }
-        matchMostLongText = standInfo.matchMostLongText;
       }
     }
     // カットイン
@@ -422,7 +591,7 @@ export class ChatInputComponent implements OnInit, OnDestroy {
     if (matchMostLongText.length < cutInInfo.matchMostLongText.length) matchMostLongText = cutInInfo.matchMostLongText;
     text = text.slice(0, text.length - matchMostLongText.length);
     // 💭
-    if (this.character && StringUtil.cr(text).trim()) {
+    if (this.isUseStandImageOnChatTab && this.character && StringUtil.cr(text).trim()) {
       // CHOICEコマンドの引数は💭としない
       const regArray = /^((srepeat|repeat|srep|rep|sx|x)?(\d+)?[ 　]+)?([^\n]*)?/ig.exec(text);
       let dialogText = (regArray[4] != null) ? regArray[4].trim() : text.trim();
@@ -481,7 +650,7 @@ export class ChatInputComponent implements OnInit, OnDestroy {
       EventSystem.trigger('CHANGE_GM_MODE', null);
     }
 
-    if (StringUtil.cr(text).trim()) {
+    if (this.text != '') {
       ChatInputComponent.history = ChatInputComponent.history.filter(string => string !== this.text);
       ChatInputComponent.history.unshift(this.text);
       if (ChatInputComponent.history.length >= ChatInputComponent.MAX_HISTORY_NUM) {
@@ -489,6 +658,9 @@ export class ChatInputComponent implements OnInit, OnDestroy {
       }
       this.currentHistoryIndex = -1;
       this.tmpText = null;
+    }
+
+    if (StringUtil.cr(text).trim()) {
       this.chat.emit({
         text: text,
         gameType: this.gameType,
@@ -560,7 +732,7 @@ export class ChatInputComponent implements OnInit, OnDestroy {
       this.contextMenuService.open(
         position, 
         [
-          { name: '接続情報', action: () => {
+          { name: '接続情報...', action: () => {
             this.panelService.open(PeerMenuComponent, { width: 520, height: 600, top: position.y - 100, left: position.x - 100 });
           } }
         ],
@@ -686,11 +858,11 @@ export class ChatInputComponent implements OnInit, OnDestroy {
         //}
       }
       contextMenuActions.push(ContextMenuSeparator);
-      contextMenuActions.push({ name: '詳細を表示', action: () => { this.showDetail(this.character); } });
+      contextMenuActions.push({ name: '詳細を表示...', action: () => { this.showDetail(this.character); } });
       if (!this.onlyCharacters) {
-        contextMenuActions.push({ name: 'チャットパレットを表示', action: () => { this.showChatPalette(this.character) } });
+        contextMenuActions.push({ name: 'チャットパレットを表示...', action: () => { this.showChatPalette(this.character) } });
       }
-      contextMenuActions.push({ name: 'スタンド設定', action: () => { this.showStandSetting(this.character) } });
+      contextMenuActions.push({ name: 'スタンド設定...', action: () => { this.showStandSetting(this.character) } });
     }
     this.contextMenuService.open(position, contextMenuActions, this.character.name);
   }

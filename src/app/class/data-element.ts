@@ -31,6 +31,24 @@ export class DataElement extends ObjectNode {
     return dataElement;
   }
 
+  get loggingValue(): string {
+    let ret: string;
+    if (this.isSimpleNumber) {
+      ret = `${this.value}`;
+    } else if (this.isNumberResource) {
+      ret = `${this.currentValue}/${this.value && this.value != 0 ? this.value : '???'}`;
+    } else if (this.isCheckProperty) {
+      ret = `${this.value ? ' → ✔ON' : ' → OFF'}`;
+    } else if (this.isAbilityScore) {
+      const modifire = this.calcAbilityScore();
+      ret = `${this.value}`;
+      if (this.currentValue) ret += `(${modifire >= 0 ? '+' : ''}${modifire})`;
+    } else {
+      ret = this.value ? this.value.toString() : '';
+    }
+    return ret;
+  }
+
   getElementsByName(name: string): DataElement[] {
     let children: DataElement[] = [];
     for (let child of this.children) {
@@ -64,11 +82,13 @@ export class DataElement extends ObjectNode {
     return null;
   }
 
-  getFirstElementByNameUnsensitive(name: string): DataElement {
+  getFirstElementByNameUnsensitive(name: string, replacePattern: string|RegExp = null, replacement=''): DataElement {
     for (let child of this.children) {
       if (child instanceof DataElement) {
-        if (StringUtil.toHalfWidth(child.getAttribute('name').replace(/[―ー—‐]/g, '-')).toLowerCase() === StringUtil.toHalfWidth(name.replace(/[―ー—‐]/g, '-')).toLowerCase()) return child;
-        let match = child.getFirstElementByNameUnsensitive(name);
+        let normalizeName = StringUtil.cr(StringUtil.toHalfWidth(name.replace(/[―ー—‐]/g, '-')).toLowerCase()).replace(/[\s\r\n]+/, ' ').trim();
+        if (replacePattern != null) normalizeName = normalizeName.replace(replacePattern, replacement);
+        if (StringUtil.cr(StringUtil.toHalfWidth(child.getAttribute('name').replace(/[―ー—‐]/g, '-')).toLowerCase()).replace(/[\s\r\n]+/, ' ').trim() === normalizeName) return child;
+        let match = child.getFirstElementByNameUnsensitive(name, replacePattern, replacement);
         if (match) return match;
       }
     }
@@ -86,5 +106,15 @@ export class DataElement extends ObjectNode {
     } else {
       return +this.value;
     }
+  }
+
+  checkValue(): string {
+    if (!this.isCheckProperty) return '0';
+    let pair = (this.currentValue + '').trim().split(/[|｜]/g, 2);
+    if (pair[1] == null) {
+      pair[1] = '0'
+      if (pair[0] == null || (pair[0].trim() === '' && !/[|｜]/.test(this.currentValue + ''))) pair[0] = '1';
+    } 
+    return pair[ this.value ? 0 : 1 ].trim();
   }
 }

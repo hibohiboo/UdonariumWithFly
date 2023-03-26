@@ -22,7 +22,7 @@ import { ImageFile } from '@udonarium/core/file-storage/image-file';
 import { StringUtil } from '@udonarium/core/system/util/string-util';
 import { OpenUrlComponent } from 'component/open-url/open-url.component';
 import { ModalService } from 'service/modal.service';
-import { Card } from '@udonarium/card';
+import { Card, CardState } from '@udonarium/card';
 import { CardStack } from '@udonarium/card-stack';
 import { DiceSymbol } from '@udonarium/dice-symbol';
 import { RangeArea } from '@udonarium/range';
@@ -60,6 +60,11 @@ export class OverviewPanelComponent implements AfterViewInit, OnDestroy {
   @Input() left: number = 0;
   @Input() top: number = 0;
 
+  @Input() cardState: CardState = null;
+
+  readonly CardStateFront = CardState.FRONT;
+  readonly CardStateBack = CardState.BACK;
+
   gridSize = 50;
   naturalWidth = 0;
   naturalHeight = 0;
@@ -88,8 +93,12 @@ export class OverviewPanelComponent implements AfterViewInit, OnDestroy {
       }
       return this._imageFile.url;
     }
-    if (this.tabletopObject instanceof Card && this.tabletopObject.isGMMode) {
-      return this.tabletopObject.frontImage ? this.tabletopObject.frontImage.url : '';
+    if (this.tabletopObject instanceof Card) { 
+      if (this.cardState !== null) {
+        if (this.cardState === this.CardStateFront) return this.tabletopObject.frontImage ? this.tabletopObject.frontImage.url : '';
+        if (this.cardState === this.CardStateBack) return this.tabletopObject.backImage ? this.tabletopObject.backImage.url : '';
+      }
+      if (this.tabletopObject.isGMMode) return this.tabletopObject.frontImage ? this.tabletopObject.frontImage.url : '';
     }
     return this.tabletopObject.imageFile ? this.tabletopObject.imageFile.url : '';
   }
@@ -164,14 +173,23 @@ export class OverviewPanelComponent implements AfterViewInit, OnDestroy {
   get dataElms(): DataElement[] { return this.tabletopObject && this.tabletopObject.detailDataElement ? this.tabletopObject.detailDataElement.children as DataElement[] : []; }
   get hasDataElms(): boolean { return 0 < this.dataElms.length; }
 
-  get newLineString(): string { return this.inventoryService.newLineString; }
+  get newLineStrings(): string { return this.inventoryService.newLineStrings; }
   get isPointerDragging(): boolean { return this.pointerDeviceService.isDragging; }
 
   get pointerEventsStyle(): any { return { 'is-pointer-events-auto': !this.isPointerDragging, 'pointer-events-none': this.isPointerDragging }; }
 
   isOpenImageView: boolean = false;
 
-  checkRegExp = /[|｜]/g;
+  checkValue(dataElm): string {
+    if (!dataElm || dataElm.currentValue == null) return '';
+    let ary = dataElm.currentValue.toString().split(/[|｜]/, 2);
+    if (ary.length <= 1) return (dataElm.value == null || dataElm.value == '') ? '' : dataElm.currentValue.toString();
+    let ret = (dataElm.value == null || dataElm.value == '') ? ary[1] : ary[0];
+    if (this.tabletopObject instanceof GameCharacter && this.tabletopObject.chatPalette) {
+      ret = this.tabletopObject.chatPalette.evaluate(ret, this.tabletopObject.rootDataElement);
+    }
+    return ret;
+  }
 
   constructor(
     private inventoryService: GameObjectInventoryService,

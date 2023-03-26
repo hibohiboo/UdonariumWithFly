@@ -14,6 +14,10 @@ import { animate, style, transition, trigger } from '@angular/animations';
 import { ChatMessageService } from 'service/chat-message.service';
 import { ConfirmationComponent, ConfirmationType } from 'component/confirmation/confirmation.component';
 import { GameCharacter } from '@udonarium/game-character';
+import { ImageFile, ImageState } from '@udonarium/core/file-storage/image-file';
+import { ImageStorage } from '@udonarium/core/file-storage/image-storage';
+
+import * as localForage from 'localforage';
 
 @Component({
   selector: 'peer-menu',
@@ -52,10 +56,14 @@ export class PeerMenuComponent implements OnInit, OnDestroy {
     return PeerCursor.myCursor.name;
   }
   set myPeerName(name: string) {
-    if (window.localStorage) {
-      localStorage.setItem(PeerCursor.CHAT_MY_NAME_LOCAL_STORAGE_KEY, name);
+    if (PeerCursor.myCursor) {
+      PeerCursor.myCursor.name = name;
+      if (PeerCursor.myCursor.name === PeerCursor.CHAT_DEFAULT_NAME) {
+        localForage.removeItem(PeerCursor.CHAT_MY_NAME_LOCAL_STORAGE_KEY).catch(e => console.log(e));
+      } else {
+        localForage.setItem(PeerCursor.CHAT_MY_NAME_LOCAL_STORAGE_KEY, PeerCursor.myCursor.name).catch(e => console.log(e));
+      }
     }
-    if (PeerCursor.myCursor) PeerCursor.myCursor.name = name;
   }
 
   get myPeerColor(): string {
@@ -63,11 +71,15 @@ export class PeerMenuComponent implements OnInit, OnDestroy {
     return PeerCursor.myCursor.color;
   }
   set myPeerColor(color: string) {
-    if (PeerCursor.myCursor) {
+    if (color && PeerCursor.myCursor) {
+      color = color.trim().toLowerCase();
+      if (!/^\#[0-9a-f]{6}$/.test(color)) return; 
       PeerCursor.myCursor.color = (color == PeerCursor.CHAT_TRANSPARENT_COLOR) ? PeerCursor.CHAT_DEFAULT_COLOR : color;
-    }
-    if (window.localStorage) {
-      localStorage.setItem(PeerCursor.CHAT_MY_COLOR_LOCAL_STORAGE_KEY, PeerCursor.myCursor.color);
+      if (PeerCursor.myCursor.color === PeerCursor.CHAT_DEFAULT_COLOR) {
+        localForage.removeItem(PeerCursor.CHAT_MY_COLOR_LOCAL_STORAGE_KEY).catch(e => console.log(e));
+      } else {
+        localForage.setItem(PeerCursor.CHAT_MY_COLOR_LOCAL_STORAGE_KEY, PeerCursor.myCursor.color).catch(e => console.log(e));
+      }
     }
   }
 
@@ -103,6 +115,16 @@ export class PeerMenuComponent implements OnInit, OnDestroy {
     this.modalService.open<string>(FileSelecterComponent, { currentImageIdentifires: currentImageIdentifires }).then(value => {
       if (!this.myPeer || !value) return;
       this.myPeer.imageIdentifier = value;
+      let file: ImageFile = ImageStorage.instance.get(value);
+      if (file) {
+        if (file.state === ImageState.COMPLETE) {
+          localForage.setItem(PeerCursor.CHAT_MY_ICON_LOCAL_STORAGE_KEY, file.blob).catch(e => console.log(e));
+        } else if (value === 'none_icon') {
+          localForage.removeItem(PeerCursor.CHAT_MY_ICON_LOCAL_STORAGE_KEY).catch(e => console.log(e));
+        } else {
+          localForage.setItem(PeerCursor.CHAT_MY_ICON_LOCAL_STORAGE_KEY, value).catch(e => console.log(e));
+        }
+      }
     });
   }
 

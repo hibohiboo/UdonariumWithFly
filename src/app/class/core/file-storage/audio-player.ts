@@ -4,6 +4,8 @@ import { FileReaderUtil } from './file-reader-util';
 export enum VolumeType {
   MASTER,
   AUDITION,
+  SOUND_EFFECT,
+  NOTICE
 }
 
 declare global {
@@ -16,24 +18,77 @@ declare global {
 type AudioCache = { url: string, blob: Blob };
 
 export class AudioPlayer {
+
+  static readonly AUDITION_VOLUME_LOCAL_STORAGE_KEY = 'udonanaumu-audio-player-audition-volume-local-storage';
+  static readonly MAIN_VOLUME_LOCAL_STORAGE_KEY = 'udonanaumu-audio-player-main-volume-local-storage';
+  static readonly SOUND_EFFECT_VOLUME_LOCAL_STORAGE_KEY = 'udonanaumu-audio-player-sound-effect-volume-local-storage';
+  static readonly NOTICE_VOLUME_LOCAL_STORAGE_KEY = 'udonanaumu-audio-player-notice-volume-local-storage';
+
+  static readonly AUDITION_IS_MUTE_LOCAL_STORAGE_KEY = 'udonanaumu-audio-player-audition-is-mute-local-storage';
+  static readonly MAIN_IS_MUTE_LOCAL_STORAGE_KEY = 'udonanaumu-audio-player-main-is-mute-local-storage';
+  static readonly SOUND_EFFECT_IS_MUTE_LOCAL_STORAGE_KEY = 'udonanaumu-audio-player-sound-effect-is-mute-local-storage';
+  static readonly NOTICE_IS_MUTE_LOCAL_STORAGE_KEY = 'udonanaumu-audio-player-notice-is-mute-local-storage';
+
   private static _audioContext: AudioContext
   static get audioContext(): AudioContext {
     if (!AudioPlayer._audioContext) AudioPlayer._audioContext = new (window.AudioContext || window.webkitAudioContext)();
     return AudioPlayer._audioContext;
   }
 
+  private static _isMute: boolean = false;
+  static get isMute(): boolean { return AudioPlayer._isMute; }
+  static set isMute(isMute: boolean) {
+    AudioPlayer._isMute = isMute;
+    AudioPlayer.volume = AudioPlayer._volume;
+  }
+
   private static _volume: number = 0.5;
   static get volume(): number { return AudioPlayer._volume; }
   static set volume(volume: number) {
     AudioPlayer._volume = volume;
-    AudioPlayer.masterGainNode.gain.setTargetAtTime(AudioPlayer._volume, AudioPlayer.audioContext.currentTime, 0.01);
+    AudioPlayer.masterGainNode.gain.setTargetAtTime(AudioPlayer.isMute ? 0 : AudioPlayer._volume, AudioPlayer.audioContext.currentTime, 0.01);
+  }
+
+  private static _isAuditionMute: boolean = false;
+  static get isAuditionMute(): boolean { return AudioPlayer._isAuditionMute; }
+  static set isAuditionMute(isAuditionMute: boolean) {
+    AudioPlayer._isAuditionMute = isAuditionMute;
+    AudioPlayer.auditionVolume = AudioPlayer._auditionVolume;
   }
 
   private static _auditionVolume: number = 0.5;
   static get auditionVolume(): number { return AudioPlayer._auditionVolume; }
   static set auditionVolume(auditionVolume: number) {
     AudioPlayer._auditionVolume = auditionVolume;
-    AudioPlayer.auditionGainNode.gain.setTargetAtTime(AudioPlayer._auditionVolume, AudioPlayer.audioContext.currentTime, 0.01);
+    AudioPlayer.auditionGainNode.gain.setTargetAtTime(AudioPlayer.isAuditionMute ? 0 : AudioPlayer._auditionVolume, AudioPlayer.audioContext.currentTime, 0.01);
+  }
+
+  private static _isSoundEffectMute: boolean = false;
+  static get isSoundEffectMute(): boolean { return AudioPlayer._isSoundEffectMute; }
+  static set isSoundEffectMute(isSoundEffectMute: boolean) { 
+    AudioPlayer._isSoundEffectMute = isSoundEffectMute; 
+    AudioPlayer.soundEffectVolume = AudioPlayer._soundEffectVolume;
+  }
+
+  private static _soundEffectVolume: number = 0.5;
+  static get soundEffectVolume(): number { return AudioPlayer._soundEffectVolume; }
+  static set soundEffectVolume(soundEffectVolume: number) {
+    AudioPlayer._soundEffectVolume = soundEffectVolume;
+    AudioPlayer.soundEffectGainNode.gain.setTargetAtTime(AudioPlayer.isSoundEffectMute ? 0 : AudioPlayer._soundEffectVolume, AudioPlayer.audioContext.currentTime, 0.01);
+  }
+
+  private static _isNoticeMute: boolean = false;
+  static get isNoticeMute(): boolean { return AudioPlayer._isNoticeMute; }
+  static set isNoticeMute(isNoticeMute: boolean) { 
+    AudioPlayer._isNoticeMute = isNoticeMute;
+    AudioPlayer.noticeVolume = AudioPlayer._noticeVolume;
+  }
+
+  private static _noticeVolume: number = 0.5;
+  static get noticeVolume(): number { return AudioPlayer._noticeVolume; }
+  static set noticeVolume(noticeVolume: number) {
+    AudioPlayer._noticeVolume = noticeVolume;
+    AudioPlayer.noticeGainNode.gain.setTargetAtTime(AudioPlayer.isNoticeMute ? 0 : AudioPlayer._noticeVolume, AudioPlayer.audioContext.currentTime, 0.01);
   }
 
   private static _masterGainNode: GainNode
@@ -58,8 +113,32 @@ export class AudioPlayer {
     return AudioPlayer._auditionGainNode;
   }
 
+  private static _soundEffectGainNode: GainNode
+  private static get soundEffectGainNode(): GainNode {
+    if (!AudioPlayer._soundEffectGainNode) {
+      let soundEffectGain = AudioPlayer.audioContext.createGain();
+      soundEffectGain.gain.setValueAtTime(AudioPlayer._soundEffectVolume, AudioPlayer.audioContext.currentTime);
+      soundEffectGain.connect(AudioPlayer.audioContext.destination);
+      AudioPlayer._soundEffectGainNode = soundEffectGain;
+    }
+    return AudioPlayer._soundEffectGainNode;
+  }
+
+  private static _noticeGainNode: GainNode
+  private static get noticeGainNode(): GainNode {
+    if (!AudioPlayer._noticeGainNode) {
+      let noticeGain = AudioPlayer.audioContext.createGain();
+      noticeGain.gain.setValueAtTime(AudioPlayer._noticeVolume, AudioPlayer.audioContext.currentTime);
+      noticeGain.connect(AudioPlayer.audioContext.destination);
+      AudioPlayer._noticeGainNode = noticeGain;
+    }
+    return AudioPlayer._noticeGainNode;
+  }
+
   static get rootNode(): AudioNode { return AudioPlayer.masterGainNode; }
   static get auditionNode(): AudioNode { return AudioPlayer.auditionGainNode; }
+  static get soundEffectNode(): AudioNode { return AudioPlayer.soundEffectGainNode; }
+  static get noticeNode(): AudioNode { return AudioPlayer.noticeGainNode; }
 
   private _audioElm: HTMLAudioElement;
   private get audioElm(): HTMLAudioElement {
@@ -95,6 +174,10 @@ export class AudioPlayer {
 
   static play(audio: AudioFile, volume: number = 1.0) {
     this.playBufferAsync(audio, volume);
+  }
+
+  static playSoundEffect(audio: AudioFile, volume: number = 1.0) {
+    this.playBufferAsyncBase(AudioPlayer.soundEffectNode, audio, volume);
   }
 
   play(audio: AudioFile = this.audio) {
@@ -135,12 +218,18 @@ export class AudioPlayer {
     switch (this.volumeType) {
       case VolumeType.AUDITION:
         return AudioPlayer.auditionNode;
+      case VolumeType.SOUND_EFFECT:
+        return AudioPlayer.soundEffectNode;
+      case VolumeType.NOTICE:
+        return AudioPlayer.noticeNode;
       default:
         return AudioPlayer.rootNode;
     }
   }
 
   private static async playBufferAsync(audio: AudioFile, volume: number = 1.0) {
+    AudioPlayer.playBufferAsyncBase(AudioPlayer.rootNode, audio, volume);
+    /*
     let source = await AudioPlayer.createBufferSourceAsync(audio);
     if (!source) return;
 
@@ -148,6 +237,27 @@ export class AudioPlayer {
     gain.gain.setValueAtTime(volume, AudioPlayer.audioContext.currentTime);
 
     gain.connect(AudioPlayer.rootNode);
+    source.connect(gain);
+
+    source.onended = () => {
+      source.stop();
+      source.disconnect();
+      gain.disconnect();
+      source.buffer = null;
+    };
+
+    source.start();
+    */
+  }
+
+  private static async playBufferAsyncBase(audioNode: AudioNode, audio: AudioFile, volume: number = 1.0) {
+    let source = await AudioPlayer.createBufferSourceAsync(audio);
+    if (!source) return;
+
+    let gain = AudioPlayer.audioContext.createGain();
+    gain.gain.setValueAtTime(volume, AudioPlayer.audioContext.currentTime);
+
+    gain.connect(audioNode);
     source.connect(gain);
 
     source.onended = () => {

@@ -1,3 +1,17 @@
+export interface OperateCommand {
+  targetName?: string,
+  operator?: string,
+  value?: string,
+  isEscapeRoll?: boolean,
+  isIncomplete?: boolean
+}
+
+export interface OperateCommandsInfo {
+  commands: OperateCommand[],
+  commandString: string,
+  endString: string
+}
+
 export namespace StringUtil {
 
   const EMOJI_REGEXP = new RegExp([
@@ -9,6 +23,7 @@ export namespace StringUtil {
   ].join('|'));
 
   export function toHalfWidth(str: String): string {
+    if (str == null || str == '') return '';
     return str.replace(/[！-～]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
   }
 
@@ -19,7 +34,7 @@ export namespace StringUtil {
   }
 
   export function cr(str: string): string {
-    if (!str) return '';
+    if (str == null || str == '') return '';
     let ret = '';
     let flg = '';
     [...str].forEach(c => {
@@ -28,6 +43,10 @@ export namespace StringUtil {
           case 'n':
           case 'ｎ':
             ret += "\n";
+            break;
+          case 's':
+          case 'ｓ':
+            ret += (c === 's' ? " " : "　");
             break;
           case '\\':
           case '￥':
@@ -43,7 +62,112 @@ export namespace StringUtil {
         ret += c;
       }
     });
-    return ret;
+    return ret + flg;
+  }
+
+  export function parseCommands(input: string, quote=false): OperateCommandsInfo {
+    const separatorRegExp = /[:：]/;
+    const operatorRegExp = /[＋＝+\-=―ー—‐－>＞]/; 
+    const spaceRegExp = /[\s　]/; 
+    const endRegExp = /[:：\s　]/; 
+    const qupteOpenTestRegExps = [separatorRegExp, operatorRegExp];
+    const qupteCloseTestRegExps = [operatorRegExp, endRegExp];
+    const stateEndRegExp = [operatorRegExp, separatorRegExp];
+    
+    const charAry = [...input];
+
+    const commands: OperateCommand[] = [];
+    let commandString = '';
+
+    let i = 0;
+    let state = 0; // 0:操作対象 1:値
+    let command: OperateCommand = {};
+    let currentPart = '';
+    let quoteChar = '';
+    let escapeChar = '';
+    let tmpCommandString = '';
+    for (; i < charAry.length; i++) {
+      const char = charAry[i];
+      if ((!quote || !quoteChar) && spaceRegExp.test(char)) break;
+
+      if (escapeChar) {
+        if (!(separatorRegExp.test(char) || operatorRegExp.test(char) || (quote && char === quoteChar))) currentPart += escapeChar;
+        currentPart += char;
+        tmpCommandString += char;
+        escapeChar = '';
+        continue;
+      }
+  
+      if (char === "\\" || char === "￥") {
+        escapeChar = char;
+        tmpCommandString += char;
+        continue;
+      }
+  
+      if (quote && quoteChar) {
+        if (char === quoteChar && (charAry[i - 1] == null || qupteCloseTestRegExps[state].test(charAry[i + 1]))) {
+          quoteChar = '';
+        } else {
+          currentPart += char;
+        }
+        tmpCommandString += char;
+      } else if (quote && (char === '"' || char === "'") && (charAry[i - 1] == null || qupteOpenTestRegExps[state].test(charAry[i - 1]))) {
+        quoteChar = char;
+        tmpCommandString += char;
+      } else if (stateEndRegExp[state].test(char)) {
+        tmpCommandString += char;
+        switch (state) {
+        case 0:
+          command.targetName = quoteChar + currentPart;
+          command.operator = this.toHalfWidth(char.replace(/[―ー—‐]/g, '-'));
+          state = 1;
+          break;
+        case 1:
+          command.value = quoteChar + currentPart;
+          //if (/^\\[^\\\s]/.test(this.toHalfWidth(command.value).trimLeft())) {
+          //  command.isEscapeRoll = true;
+          //  command.value = command.value.replace(/[\\￥]/, '');
+          //}
+          commands.push(command);
+          command = {};
+          state = 0;
+          break;
+        }
+        commandString += tmpCommandString;
+        tmpCommandString = ''
+        currentPart = '';
+        quoteChar = '';
+      } else {
+        currentPart += char;
+        tmpCommandString += char;
+      }
+    }
+
+    const flagment = quoteChar + currentPart + escapeChar;
+    switch (state) {
+    case 0:
+      if (flagment == '') break;
+      command.targetName = flagment;
+      commandString += flagment;
+      command.isIncomplete = true;
+      commands.push(command);
+      break;
+    case 1:
+      command.value = flagment;
+      //if (/^\\[^\\]/.test(this.toHalfWidth(command.value).trimLeft())) {
+      //  command.isEscapeRoll = true;
+      //  command.value = command.value.replace(/[\\￥]/, '');
+      //}
+      commandString += flagment;
+      commands.push(command);
+      break;
+    }
+
+    return { 
+      commands: commands, 
+      commandString: commandString,
+      endString: ((i < charAry.length) ? charAry.slice(i).join('') : '').replace(/^[\s　]/, '')
+    };
   }
 
   export function validUrl(url: string): boolean {

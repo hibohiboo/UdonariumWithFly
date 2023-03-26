@@ -21,15 +21,12 @@ export class ChatPalette extends ObjectNode {
   @SyncVar() paletteColor: string = '';
   //TODO: キャラシ項目のコピー
 
-  get color() {
-    if (this.paletteColor && this.paletteColor != '#ffffff') {
+  get color(): string {
+    if (this.paletteColor && this.paletteColor != PeerCursor.CHAT_TRANSPARENT_COLOR) {
       return this.paletteColor;
-    }
-    if (window.localStorage 
-      && localStorage.getItem(PeerCursor.CHAT_MY_COLOR_LOCAL_STORAGE_KEY) 
-      && localStorage.getItem(PeerCursor.CHAT_MY_COLOR_LOCAL_STORAGE_KEY) != '#ffffff') {
-      return localStorage.getItem(PeerCursor.CHAT_MY_COLOR_LOCAL_STORAGE_KEY);
-    }
+    } else if (PeerCursor.myCursor && PeerCursor.myCursor.color != PeerCursor.CHAT_TRANSPARENT_COLOR) {
+      return PeerCursor.myCursor.color;
+    } 
     return PeerCursor.CHAT_DEFAULT_COLOR;
   }
   set color(color: string) {
@@ -71,7 +68,7 @@ export class ChatPalette extends ObjectNode {
       evaluate = line.palette;
     }
 
-    console.log(evaluate);
+    //console.log(evaluate);
     let limit = 128;
     let loop = 0;
     let isContinue = true;
@@ -85,32 +82,39 @@ export class ChatPalette extends ObjectNode {
         //name = StringUtil.toHalfWidth(name).toLocaleLowerCase();
         let ret: number|string = '';
         for (let variable of this.paletteVariables) {
-          if (variable.name == name) ret = variable.value;
+          //if (variable.name == name) ret = variable.value;
+          if (StringUtil.toHalfWidth(variable.name.replace(/[―ー—‐]/g, '-')).toLowerCase() === StringUtil.toHalfWidth(name.replace(/[―ー—‐]/g, '-')).toLowerCase()) ret = variable.value;
         }
         if (extendVariables) {
           let element = extendVariables.getFirstElementByNameUnsensitive(name);
           if (element) {
             ret = element.isNumberResource ? element.currentValue
-              : element.isCheckProperty ? (element.currentValue + '').split(/[|｜]/g)[ element.value ? 0 : 1 ]
+              //: element.isCheckProperty ? (element.currentValue + '').split(/[|｜]/g)[ element.value ? 0 : 1 ]
+              : element.isCheckProperty ? element.checkValue()
               : element.isAbilityScore ? element.calcAbilityScore()
               : element.value;
             if (ret == null) ret = '';
           } else {
             if ((
-              element = extendVariables.getFirstElementByNameUnsensitive(name.replace(/^最大/, ''))
-              || extendVariables.getFirstElementByNameUnsensitive(name.replace(/^Max[\:\_\-\s]?/i, ''))
-              || extendVariables.getFirstElementByNameUnsensitive(name.replace(/^基本/, ''))
-              || extendVariables.getFirstElementByNameUnsensitive(name.replace(/^初期/, ''))
-              || extendVariables.getFirstElementByNameUnsensitive(name.replace(/^原/, ''))
-              || extendVariables.getFirstElementByNameUnsensitive(name.replace(/基本値$/, ''))
-              || extendVariables.getFirstElementByNameUnsensitive(name.replace(/初期値$/, ''))
-              || extendVariables.getFirstElementByNameUnsensitive(name.replace(/原点$/, ''))
+              element = extendVariables.getFirstElementByNameUnsensitive(name, /^最大/)
+              || extendVariables.getFirstElementByNameUnsensitive(name, /^Max[\:\_\-\s]*/i)
+              || extendVariables.getFirstElementByNameUnsensitive(name, /^初期/)
+              || extendVariables.getFirstElementByNameUnsensitive(name, /初期値$/)
+              || extendVariables.getFirstElementByNameUnsensitive(name, /最大値$/)
+            ) && (element.isNumberResource || element.isAbilityScore)) { // 互換のためにいったん残し、将来リソースのみにするかも？
+              ret = element.value;
+            } else if ((
+              element = extendVariables.getFirstElementByNameUnsensitive(name, /^基本/)
+              || extendVariables.getFirstElementByNameUnsensitive(name, /^原/)
+              || extendVariables.getFirstElementByNameUnsensitive(name, /\^$/)
+              || extendVariables.getFirstElementByNameUnsensitive(name, /基本値$/)
+              || extendVariables.getFirstElementByNameUnsensitive(name, /原点$/)
             ) && (element.isNumberResource || element.isAbilityScore)) {
               ret = element.value;
-            }
-            if ((element = extendVariables.getFirstElementByNameUnsensitive(name.replace(/修正値?$/, ''))
-              || extendVariables.getFirstElementByNameUnsensitive(name.replace(/\s*Mod(ifier|\.)?$/i, ''))
-              || extendVariables.getFirstElementByNameUnsensitive(name.replace(/ボーナス$/, ''))
+            } else if ((
+              element = extendVariables.getFirstElementByNameUnsensitive(name, /修正値?$/)
+              || extendVariables.getFirstElementByNameUnsensitive(name, /\s*Mod(ifier|\.)?$/i)
+              || extendVariables.getFirstElementByNameUnsensitive(name, /ボーナス$/)
             ) && element.isAbilityScore) {
               ret = element.calcAbilityScore();
             }
