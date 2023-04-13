@@ -56,11 +56,28 @@ import { ConfirmationComponent, ConfirmationType } from 'component/confirmation/
 import { SwUpdate } from '@angular/service-worker';
 
 import * as localForage from 'localforage';
+import { animate, keyframes, style, transition, trigger } from '@angular/animations';
 
 @Component({
   selector: 'app-root',
   templateUrl: './app.component.html',
-  styleUrls: ['./app.component.css']
+  styleUrls: ['./app.component.css'],
+  animations: [
+    trigger('fadeInOut', [
+      transition('void => *', [
+        animate('100ms ease-out', keyframes([
+          style({ opacity: 0, offset: 0 }),
+          style({ opacity: 1, offset: 1.0 })
+        ]))
+      ]),
+      transition('* => void', [
+        animate('100ms ease-in', keyframes([
+          style({ opacity: 1, offset: 0 }),
+          style({ opacity: 0, offset: 1.0 })
+        ]))
+      ])
+    ])
+  ]
 })
 export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
 
@@ -74,6 +91,11 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
   isHorizontal = false;
   isLoggedin = false;
   isUpdateCanceled = false;
+
+  static imageUrl = '';
+  get imageUrl(): string {
+    return AppComponent.imageUrl;
+  }
   
   private noticeIntervalTimer: NodeJS.Timer = null;
 
@@ -483,15 +505,23 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
     });
     
     // PWA
+    let notification: Notification;
     this.swUpdate.versionUpdates.subscribe(event => {
       switch (event.type) {
         case 'VERSION_DETECTED':
           console.log(`Downloading new app version: ${event.version.hash}`);
           Notification.requestPermission().then((permission) => {
             if (permission === 'granted') {
-              new Notification('Udonarium with Fly', { 
+              notification = new Notification('Udonarium with Fly', { 
                 body: 'Udonarium with Fly の新しいバージョンをダウンロード中です。',
                 icon: 'card.png'
+              });
+              notification.addEventListener('click', function() {
+                if (notification) {
+                  notification.close();
+                  notification = null;
+                }
+                return false;
               });
             }
           });
@@ -503,7 +533,7 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
             this.modalService.open(ConfirmationComponent, {
               title: 'Udonarium with Fly の更新', 
               text: 'Udonarium with Fly の新しいバージョンをダウンロードしました。更新を行いますか？',
-              helpHtml: '<b style="color: red">更新の際にページを再読み込みします。</b>あとで手動で再読み込みを行うことでも更新可能です。',
+              helpHtml: '<b style="color: red">更新の際にページを再読み込みします。</b>手動で再読み込みを行うことでも更新可能です。',
               type: ConfirmationType.OK_CANCEL,
               materialIcon: 'browser_updated',
               action: () => {
@@ -777,6 +807,11 @@ export class AppComponent implements OnInit, AfterViewInit, OnDestroy {
 
   rotateChange(isHorizontal) {
     this.isHorizontal = isHorizontal;
+  }
+
+  closeImagePreview() {
+    URL.revokeObjectURL(AppComponent.imageUrl);
+    AppComponent.imageUrl = '';
   }
 }
 

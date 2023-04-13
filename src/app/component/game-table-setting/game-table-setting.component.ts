@@ -10,6 +10,7 @@ import { TableSelecter } from '@udonarium/table-selecter';
 import { ConfirmationComponent, ConfirmationType } from 'component/confirmation/confirmation.component';
 
 import { FileSelecterComponent } from 'component/file-selecter/file-selecter.component';
+import { ChatMessageService } from 'service/chat-message.service';
 import { ImageService } from 'service/image.service';
 import { ModalService } from 'service/modal.service';
 import { PanelService } from 'service/panel.service';
@@ -49,6 +50,7 @@ export class GameTableSettingComponent implements OnInit, OnDestroy, AfterViewIn
   get tableGridShow(): boolean { return this.tableSelecter.gridShow; }
   set tableGridShow(tableGridShow: boolean) {
     this.tableSelecter.gridShow = tableGridShow;
+    if (tableGridShow) this.tableSelecter.viewTable.gridClipRect = null;
     EventSystem.trigger('UPDATE_GAME_OBJECT', this.tableSelecter.toContext()); // 自分にだけイベントを発行してグリッド更新を誘発
   }
 
@@ -91,7 +93,8 @@ export class GameTableSettingComponent implements OnInit, OnDestroy, AfterViewIn
     private modalService: ModalService,
     private saveDataService: SaveDataService,
     private imageService: ImageService,
-    private panelService: PanelService
+    private panelService: PanelService,
+    private chatMessageService: ChatMessageService
   ) { }
 
   ngOnInit() {
@@ -199,6 +202,7 @@ export class GameTableSettingComponent implements OnInit, OnDestroy, AfterViewIn
         type: ConfirmationType.OK_CANCEL,
         materialIcon: 'visibility',
         action: () => {
+          this.chatMessageService.sendOperationLog('テーブル設定 から非表示設定の画像を表示した');
           this.isShowHideImages = true;
           (<HTMLInputElement>$event.target).checked = true;
           this.changeDetector.markForCheck();

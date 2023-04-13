@@ -7,7 +7,7 @@ import {
   OnDestroy,
   OnInit,
 } from '@angular/core';
-import { ImageFile } from '@udonarium/core/file-storage/image-file';
+import { ImageFile, ImageState } from '@udonarium/core/file-storage/image-file';
 import { EventSystem, Network } from '@udonarium/core/system';
 import { ModalService } from 'service/modal.service';
 import { PanelService } from 'service/panel.service';
@@ -17,6 +17,8 @@ import { ImageTagList } from '@udonarium/image-tag-list';
 import { trigger, transition, animate, keyframes, style } from '@angular/animations';
 import { FileStorageComponent } from 'component/file-storage/file-storage.component';
 import { ConfirmationComponent, ConfirmationType } from 'component/confirmation/confirmation.component';
+import { AppComponent } from 'src/app/app.component';
+import { ChatMessageService } from 'service/chat-message.service';
 
 @Component({
   selector: 'file-selector',
@@ -101,7 +103,8 @@ export class FileSelecterComponent implements OnInit, OnDestroy, AfterViewInit {
   constructor(
     private changeDetector: ChangeDetectorRef,
     private panelService: PanelService,
-    private modalService: ModalService
+    private modalService: ModalService,
+    private chatMessageService: ChatMessageService
   ) {
     this.isAllowedEmpty = this.modalService.option && this.modalService.option.isAllowedEmpty ? true : false;
     if (this.modalService.option && this.modalService.option.currentImageIdentifires) {
@@ -212,6 +215,7 @@ export class FileSelecterComponent implements OnInit, OnDestroy, AfterViewInit {
         type: ConfirmationType.OK_CANCEL,
         materialIcon: 'visibility',
         action: () => {
+          this.chatMessageService.sendOperationLog('ファイル一覧 から非表示設定の画像を表示した');
           this.isShowHideImages = true;
           (<HTMLInputElement>$event.target).checked = true;
           this.changeDetector.markForCheck();
@@ -256,5 +260,13 @@ export class FileSelecterComponent implements OnInit, OnDestroy, AfterViewInit {
 
   identify(index, image){
     return image.identifier;
+  }
+
+  chanageImageView(imageFile: ImageFile) {
+    if (imageFile.state === ImageState.COMPLETE) {
+      AppComponent.imageUrl = URL.createObjectURL(imageFile.blob);
+    } else {
+      AppComponent.imageUrl = imageFile.url;
+    }
   }
 }

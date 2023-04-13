@@ -35,7 +35,8 @@ export interface ContextMenuAction {
   level?: number,
   color?: string,
   center?: boolean,
-  colorSample?: boolean
+  colorSample?: boolean,
+  hotkey?: string
 }
 
 @Injectable()

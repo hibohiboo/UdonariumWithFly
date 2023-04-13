@@ -325,6 +325,36 @@ export class CardComponent implements OnInit, OnDestroy, AfterViewInit {
         }),
       ContextMenuSeparator,
       {
+        name: '右回転', action: () => {
+          this.turnRight();
+        },
+        materialIcon: 'turn_right',
+        hotkey: 'R'
+      }, 
+      {
+        name: '左回転', action: () => {
+          this.turnLeft();
+        },
+        materialIcon: 'turn_left',
+        hotkey: 'Shift+R'
+      },
+      ContextMenuSeparator,
+      {
+        name: '正位置(0°)にする', action: () => {
+          this.vertical();
+        },
+        hotkey: 'U',
+        disabled: this.card.rotate == 0
+      }, 
+      {
+        name: '横向き(90°)にする', action: () => {
+          this.horizontal();
+        },
+        hotkey: 'T',
+        disabled: this.card.rotate == 90
+      },
+      ContextMenuSeparator,
+      {
         name: '重なったカードで山札を作る', action: () => {
           this.createStack();
           SoundEffect.play(PresetSound.cardPut);
@@ -431,6 +461,28 @@ export class CardComponent implements OnInit, OnDestroy, AfterViewInit {
 
   private adjustMinBounds(value: number, min: number = 0): number {
     return value < min ? min : value;
+  }
+
+  vertical() {
+    if (this.card.rotate == 0) return; 
+    this.card.rotate = 0; 
+    SoundEffect.play(PresetSound.cardPut);
+  }
+
+  horizontal() {
+    if (this.card.rotate == 90) return; 
+    this.card.rotate = 90; 
+    SoundEffect.play(PresetSound.cardPut);
+  }
+
+  turnRight() {
+    this.card.rotate += 45; 
+    SoundEffect.play(PresetSound.cardPut);
+  }
+
+  turnLeft() {
+    this.card.rotate -= 45; 
+    SoundEffect.play(PresetSound.cardPut);
   }
 
   private showDetail(gameObject: Card) {

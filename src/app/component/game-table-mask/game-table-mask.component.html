@@ -1,21 +1,45 @@
-<div class="component is-3d" [ngClass]="{'is-grab': !isLock}" style="pointer-events: none"
+<div class="component is-3d" [ngClass]="{'is-grab': !isLock && !isScratching, 'is-scratching': isScratching && gameTableMask.isMine, 'is-border': !isLock || isScratching }" style="pointer-events: none"
   [style.width.px]="width * gridSize" [style.height.px]="height * gridSize"
-  appMovable [movable.option]="movableOption" [movable.disable]="isLock" (movable.ondragstart)="onMove()" (movable.ondragend)="onMoved()">
-  <div class="is-3d text" style="left: 2px; top: 2px; backface-visibility: hidden" [ngClass]="{fall: altitude == 0}"
-    [style.width.px]="width * gridSize - 4" [style.height.px]="height * gridSize - 4"
-    [ngStyle]="{'transform': 'translateZ(' + (altitude * gridSize) + 'px)'}">
-    <div class="is-3d" [ngClass]="{'is-inverse': isInverse}" [style.font-size.px]="fontSize + 9" [style.color]="color" [style.text-shadow]="textShadowCss" style="z-index: 5; pointer-events: none" [innerHtml]="rubiedText"></div>
-  </div>
-  <div class="border is-fit-full" style="backface-visibility: hidden" [ngClass]="{fall: altitude == 0}" [ngStyle]="{'border-width': isLock ? '0px' : '2px', 'transform': 'translateZ(' + (altitude * gridSize) + 'px)'}">
-    <div class="is-fit-full is-3d chrome-smooth-image-trick"
-      style="pointer-events: auto" [style.opacity]="opacity * (isGMMode && gameTableMask.isTransparentOnGMMode ? 0.6 : 1)"
-      [style.background-color]="imageFile.url.length < 1 || blendType > 0 ? bgcolor : null"
-      [ngClass]="{image: imageFile.url.length >= 1}">
-      <img *ngIf="imageFile.url.length >= 1" class="is-fit-full is-3d chrome-smooth-image-trick" style="pointer-events: none; position: absolute;" [style.mix-blend-mode]="blendType == 1 ? null : 'hard-light'" [src]="imageFile.url | safe: 'resourceUrl'">
+  appMovable [movable.option]="movableOption" [movable.disable]="isLock || isScratching" (movable.ondragstart)="onMove()" (movable.ondragend)="onMoved()">
+  <div class="is-fit-full is-3d" style="pointer-events: none"  [ngClass]="{fall: altitude == 0}" [ngStyle]="{'transform': 'translateZ(' + (altitude * gridSize) + 'px)'}">
+    <div *ngIf="!isScratching" class="is-3d text" style="left: 2px; top: 2px; backface-visibility: hidden"
+      [style.width.px]="width * gridSize - 4" [style.height.px]="height * gridSize - 4">
+      <div class="is-3d" [ngClass]="{'is-inverse': isInverse}" [style.font-size.px]="fontSize + 9" [style.color]="color" [style.text-shadow]="textShadowCss" style="z-index: 5; pointer-events: none" [innerHtml]="rubiedText"></div>
     </div>
-  </div>
-  <div class="lock-icon is-center is-3d" style="pointer-events: none; z-index: 10" [ngClass]="{fall: altitude == 0}" [ngStyle]="{'transform': 'translateZ(' + (altitude * gridSize) + 'px)'}">
-    <i class="material-icons is-3d" style="pointer-events: none; backface-visibility: hidden">{{ isLock ? 'lock' : 'open_with' }}</i>
+    <div class="is-fit-full is-3d">
+      <div class="is-fit-full is-3d chrome-smooth-image-trick" style="pointer-events: auto; position: absolute; backface-visibility: hidden"
+        [ngStyle]="{'opacity': operateOpacity, 'background-color': imageFile.url.length < 1 || blendType > 0 ? bgcolor : null, '-webkit-mask': masksCss, mask: masksCss}"
+        [ngClass]="{image: imageFile.url.length >= 1}">
+        <img *ngIf="imageFile.url.length >= 1" class="is-fit-full is-3d chrome-smooth-image-trick" style="pointer-events: none; position: absolute;" [style.mix-blend-mode]="blendType == 1 ? null : 'hard-light'" [src]="imageFile.url | safe: 'resourceUrl'">
+      </div>
+      <div class="is-fit-full is-3d scratching-area" style="pointer-events: none; backface-visibility: hidden">
+        <div class="is-fit-full is-3d border" [style.background-color]="isScratching ? '#00000077' : 'transparent'" style="pointer-events: none">
+          <ng-container *ngIf="isScratching">
+            <div *ngFor="let gridInfo of scratchingGridInfos; trackBy: identify" class="is-3d" [@bounceInOut]="gridInfo.state == 1 ? gridInfo.state : 0" [@rotateInOut]="gridInfo.state == 1 ? mull : gridInfo.state"
+              style="position: absolute; pointer-events: none; display: flex; justify-content: center; align-items: center"
+              [style.width]="gridSize + 'px'"
+              [style.height]="gridSize + 'px'"
+              [style.left]="(gridInfo.x * gridSize) + 'px'"
+              [style.top]="(gridInfo.y * gridSize) + 'px'">
+              <div style="width: calc(100% - 16px); height: calc(100% - 16px); pointer-events: none" class="scratching-mark" 
+                [ngClass]="{ scratched: gridInfo.state == 3, scratching: gridInfo.state == 1, restore: gridInfo.state == 2 }">
+              </div>
+            </div>
+          </ng-container>
+        </div>
+      </div>
+    </div>
+    <div *ngIf="!isScratching" class="lock-icon is-center is-3d" style="pointer-events: none; z-index: 10; backface-visibility: hidden">
+      <i class="material-icons" style="pointer-events: none; backface-visibility: hidden">{{ isLock ? 'lock' : 'open_with' }}</i>
+    </div>
+    <div *ngIf="isScratching && ownerIsOnline" class="draw-icon is-center is-3d" style="pointer-events: none; z-index: 10; backface-visibility: hidden" [ngClass]="{'is-mine': gameTableMask.isMine}">
+      <i class="material-icons" style="pointer-events: none; backface-visibility: hidden">{{ isGMMode && gameTableMask.isScratchPreviewOnGMMode ? 'visibility' : 'draw' }}</i>
+    </div>
+    <div *ngIf="isScratching && ownerIsOnline" class="scratching is-center is-3d" style="pointer-events: none; z-index: 10; top: -7px; left: 1px; backface-visibility: hidden" [ngClass]="{'is-mine': gameTableMask.isMine}">
+      <div class="name-tag has-length-limit is-nowrap is-black-background" style="color: whitesmoke" [ngStyle]="{'background-color': ownerColor}">
+        <span style="display: inline-block" [ngClass]="{'is-inverse': isInverse}"><b>{{ownerName}}</b> が操作中</span>
+      </div>
+    </div>
   </div>
   <div class="is-3d" *ngIf="isAltitudeIndicate && math.abs(gameTableMaskAltitude) >= 0.5"
     style="display: flex; align-items: center; border-left: 2px dashed blanchedalmond; transform-origin: top left; pointer-events: none"

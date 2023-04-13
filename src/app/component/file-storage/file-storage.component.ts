@@ -1,7 +1,7 @@
 import { AfterViewInit, ChangeDetectionStrategy, ChangeDetectorRef, Component, OnDestroy, OnInit } from '@angular/core';
 
 import { FileArchiver } from '@udonarium/core/file-storage/file-archiver';
-import { ImageFile } from '@udonarium/core/file-storage/image-file';
+import { ImageFile, ImageState } from '@udonarium/core/file-storage/image-file';
 import { ImageStorage } from '@udonarium/core/file-storage/image-storage';
 import { EventSystem, Network } from '@udonarium/core/system';
 
@@ -13,6 +13,8 @@ import { UUID } from '@udonarium/core/system/util/uuid';
 import { ConfirmationComponent, ConfirmationType } from 'component/confirmation/confirmation.component';
 import { ModalService } from 'service/modal.service';
 import { StringUtil } from '@udonarium/core/system/util/string-util';
+import { AppComponent } from 'src/app/app.component';
+import { ChatMessageService } from 'service/chat-message.service';
 
 @Component({
   selector: 'file-storage',
@@ -110,7 +112,8 @@ export class FileStorageComponent implements OnInit, OnDestroy, AfterViewInit {
   constructor(
     private changeDetector: ChangeDetectorRef,
     private panelService: PanelService,
-    private modalService: ModalService
+    private modalService: ModalService,
+    private chatMessageService: ChatMessageService
   ) { }
   
   ngOnInit() {
@@ -264,6 +267,7 @@ export class FileStorageComponent implements OnInit, OnDestroy, AfterViewInit {
         type: ConfirmationType.OK_CANCEL,
         materialIcon: 'visibility',
         action: () => {
+          this.chatMessageService.sendOperationLog('ファイル一覧 から非表示設定の画像を表示した');
           this.isShowHideImages = true;
           (<HTMLInputElement>$event.target).checked = true;
           this.changeDetector.markForCheck();
@@ -347,5 +351,13 @@ export class FileStorageComponent implements OnInit, OnDestroy, AfterViewInit {
   suggestWords(): string[] {
     const selectedWords = this.selectedImagesOwnWords(true);
     return Array.from(new Set(this.allImagesOwnWords.concat(this.deletedWords))).filter(word => word.indexOf('*') !== 0 && !selectedWords.includes(word));
+  }
+
+  chanageImageView(imageFile: ImageFile) {
+    if (imageFile.state === ImageState.COMPLETE) {
+      AppComponent.imageUrl = URL.createObjectURL(imageFile.blob);
+    } else {
+      AppComponent.imageUrl = imageFile.url;
+    }
   }
 }
