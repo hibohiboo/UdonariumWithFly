@@ -148,7 +148,8 @@ export class GameCharacterSheetComponent implements OnInit, OnDestroy, AfterView
 
   ngAfterViewInit() {
     queueMicrotask(() => {
-      this.chatMessageService.sendOperationLog(`${this.panelService.title} を開いた`);
+      const title = (this.tabletopObject instanceof Card && !this.tabletopObject.isFront) ? 'カード設定 - カード（裏面）' : this.panelService.title;
+      this.chatMessageService.sendOperationLog(`${title} を開いた`);
     });
   }
 
@@ -487,7 +488,7 @@ export class GameCharacterSheetComponent implements OnInit, OnDestroy, AfterView
     return card ? card.fontsize + 9 : 18;
   }
 
-  get cardText(): number {
+  get cardText(): string {
     let card = null;
     if (this.tabletopObject instanceof CardStack) {
       card = this.tabletopObject.topCard;

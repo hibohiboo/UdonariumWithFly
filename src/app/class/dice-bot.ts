@@ -43,10 +43,13 @@ interface DiceRollResult {
   isFumble?: boolean;
 }
 
+let loader: BCDiceLoader;
+let queue: PromiseQueue = initializeDiceBotQueue();
+
 @SyncObject('dice-bot')
 export class DiceBot extends GameObject {
-  private static queue: PromiseQueue = DiceBot.initializeDiceBotQueue();
-  public static loader = new BCDiceLoader();
+  //private static queue: PromiseQueue = DiceBot.initializeDiceBotQueue();
+  //public static loader = new BCDiceLoader();
 
   public static apiUrl: string = null;
   public static apiVersion: number = 1;
@@ -356,6 +359,7 @@ export class DiceBot extends GameObject {
     if (finalResult.result) finalResult.result = finalResult.result.trimRight();;
     return finalResult;
   }
+  //static diceBotInfos: GameSystemInfo[] = [];
 
   // GameObject Lifecycle
   onStoreAdded() {
@@ -616,55 +620,14 @@ export class DiceBot extends GameObject {
   }
 
   static async loadGameSystemAsync(gameType: string): Promise<GameSystemClass> {
-    return await DiceBot.queue.add(() => {
+    return await queue.add(() => {
       const id = this.diceBotInfos.some(info => info.id === gameType) ? gameType : 'DiceBot';
       try {
-        return DiceBot.loader.getGameSystemClass(id);
+        return loader.getGameSystemClass(id);
       } catch {
-        return DiceBot.loader.dynamicLoad(id);
+        return loader.dynamicLoad(id);
       }
     });
-  }
-
-  private static initializeDiceBotQueue(): PromiseQueue {
-    let queue = new PromiseQueue('DiceBotQueue');
-    queue.add(async () => {
-      DiceBot.loader = new (await import(
-        /* webpackChunkName: "lib/bcdice/bcdice-loader" */
-        './bcdice/bcdice-loader')
-      ).default();
-      DiceBot.diceBotInfos = DiceBot.loader.listAvailableGameSystems()
-      .filter(gameSystemInfo => gameSystemInfo.id != 'DiceBot')
-      .sort((a ,b) => {
-        const aKey: string = a.sortKey;
-        const bKey: string = b.sortKey;
-        if (aKey < bKey) {
-          return -1;
-        }
-        if (aKey > bKey) {
-          return 1;
-        }
-        return 0
-      })
-      .map<DiceBotInfo>(gameSystemInfo => {
-        const lang = /.+\:(.+)/.exec(gameSystemInfo.id);
-        let langName;
-        if (lang && lang[1]) {
-          langName = (lang[1] == 'ChineseTraditional') ? '正體中文'
-            : (lang[1] == 'Korean') ? '한국어'
-            : (lang[1] == 'English') ? 'English'
-            : (lang[1] == 'SimplifiedChinese') ? '简体中文'
-            : 'Other';
-        }
-        return {
-          id: gameSystemInfo.id,
-          game: gameSystemInfo.name,
-          lang: langName,
-          sort_key: gameSystemInfo.sortKey
-        };
-      });
-    });
-    return queue;
   }
 
   private static formatRollResult(result: string, id='DiceBot'): string {
@@ -822,4 +785,110 @@ export class DiceBot extends GameObject {
     }
     return isPass;
   }
+/*
+  function initializeDiceBotQueue(): PromiseQueue {
+    let queue = new PromiseQueue('DiceBotQueue');
+    queue.add(async () => {
+      loader = new (await import(
+        
+        './bcdice/bcdice-loader')
+      ).default();
+      DiceBot.diceBotInfos = loader.listAvailableGameSystems()
+        .sort((a, b) => {
+          if (a.sortKey < b.sortKey) return -1;
+          if (a.sortKey > b.sortKey) return 1;
+          return 0;
+        });
+    });
+    return queue;
+  }
+*/
+}
+
+function initializeDiceBotQueue(): PromiseQueue {
+  let queue = new PromiseQueue('DiceBotQueue');
+  queue.add(async () => {
+    loader = new (await import(
+      /* webpackChunkName: "lib/bcdice/bcdice-loader" */
+      './bcdice/bcdice-loader')
+    ).default();
+    DiceBot.diceBotInfos = loader.listAvailableGameSystems()
+    .filter(gameSystemInfo => gameSystemInfo.id != 'DiceBot')
+    .sort((a ,b) => {
+      const aKey: string = a.sortKey;
+      const bKey: string = b.sortKey;
+      if (aKey < bKey) {
+        return -1;
+      }
+      if (aKey > bKey) {
+        return 1;
+      }
+      return 0
+    })
+    .map<DiceBotInfo>(gameSystemInfo => {
+      const lang = /.+\:(.+)/.exec(gameSystemInfo.id);
+      let langName;
+      if (lang && lang[1]) {
+        langName = (lang[1] == 'ChineseTraditional') ? '正體中文'
+          : (lang[1] == 'Korean') ? '한국어'
+          : (lang[1] == 'English') ? 'English'
+          : (lang[1] == 'SimplifiedChinese') ? '简体中文'
+          : 'Other';
+      }
+      return {
+        id: gameSystemInfo.id,
+        game: gameSystemInfo.name,
+        lang: langName,
+        sort_key: gameSystemInfo.sortKey
+      };
+    });
+    DiceBot.diceBotInfos.forEach((info) => {
+      let normalize = info.sort_key.normalize('NFKD');
+      for (let replaceData of DiceBot.replaceData) {
+        if (replaceData[2] && info.game === replaceData[0]) {
+          normalize = replaceData[1];
+          info.game = replaceData[2];
+        }
+        normalize = normalize.split(replaceData[0].normalize('NFKD')).join(replaceData[1].normalize('NFKD'));
+      }
+      normalize = normalize.replace(/[\u3041-\u3096]/g, m => String.fromCharCode(m.charCodeAt(0) + 0x60))
+        .replace(/第(.+?)版/g, 'タイ$1ハン')
+        .replace(/[・!?！？\s　:：=＝\/／（）\(\)]+/g, '')
+        .replace(/([アカサタナハマヤラワ])ー+/g, '$1ア')
+        .replace(/([イキシチニヒミリ])ー+/g, '$1イ')
+        .replace(/([ウクスツヌフムユル])ー+/g, '$1ウ')
+        .replace(/([エケセテネヘメレ])ー+/g, '$1エ')
+        .replace(/([オコソトノホモヨロ])ー+/g, '$1オ')
+        .replace(/ン+ー+/g, 'ン')
+        .replace(/ン+/g, 'ン');
+      info.sort_key = info.lang ? info.lang : normalize.normalize('NFKD');
+      //return info;
+      //console.log(info.index + ': ' + normalize);
+    });
+    DiceBot.diceBotInfos.sort((a, b) => {
+      if (a.sort_key == 'Other' && b.sort_key == 'Other') {
+        return 0;
+      } else if (a.sort_key == 'Other') {
+        return 1;
+      } else if (b.sort_key == 'Other') {
+        return -1;
+      }
+      return a.sort_key == b.sort_key ? 0 
+      : a.sort_key < b.sort_key ? -1 : 1;
+    });
+    let sentinel = DiceBot.diceBotInfos[0].sort_key[0];
+    let group = { index: sentinel, infos: [] };
+    for (let info of DiceBot.diceBotInfos) {
+      if (info.lang == 'Other') info.lang = '简体中文'; //手抜き
+      if ((info.lang ? info.lang : info.sort_key[0]) !== sentinel) {
+        sentinel = info.lang ? info.lang : info.sort_key[0];
+        DiceBot.diceBotInfosIndexed.push(group);
+        group = { index: sentinel, infos: [] };
+      }
+      group.infos.push({ id: info.id, game: info.game });
+    }
+    DiceBot.diceBotInfosIndexed.push(group);
+    DiceBot.diceBotInfosIndexed.sort((a, b) => a.index == b.index ? 0 : a.index < b.index ? -1 : 1);
+  });
+  return queue;
 }
